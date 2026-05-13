@@ -1,0 +1,128 @@
+{% extends 'student/base.html' %}
+
+{% block content %}
+<div class="form-card">
+    <h2 class="text-center">Add New Student</h2>
+
+    <form method="POST" id="studentForm" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label>Student Name *</label>
+            <input type="text" name="name" placeholder="e.g., John Doe" required
+                   id="name" class="form-input" value="{{ form_data.name }}">
+            <small class="form-hint">Enter full name using only letters and spaces</small>
+            <div class="error-message" id="name-error"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Phone Number *</label>
+            <input type="tel" name="phone" placeholder="e.g., 9876543210" required
+                   id="phone" class="form-input" maxlength="10" value="{{ form_data.phone }}">
+            <small class="form-hint">Enter 10-digit mobile number starting with 6, 7, 8, or 9</small>
+            <div class="error-message" id="phone-error"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Email *</label>
+            <input type="email" name="email" placeholder="e.g., john.doe@example.com" required
+                   id="email" class="form-input" value="{{ form_data.email }}">
+            <small class="form-hint">Enter a valid email address (e.g., name@domain.com)</small>
+            <div class="error-message" id="email-error"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Course *</label>
+            <select name="course" id="course" class="form-input" required>
+                <option value="">Select a course</option>
+                {% for course in courses %}
+                    <option value="{{ course.course_id }}" {% if form_data.course == course.course_id|stringformat:"s" %}selected{% endif %}>
+                        {{ course.course_name }} ({{ course.course_code }})
+                    </option>
+                {% endfor %}
+            </select>
+            <small class="form-hint">Choose a course from the master list.</small>
+            <div class="error-message" id="course-error"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Student Image</label>
+            <input type="file" name="student_image" id="studentImage" class="form-input" accept="image/png,image/jpeg,image/gif">
+            <small class="form-hint">Upload a JPG, PNG, or GIF image. Max size 2MB.</small>
+            <div class="image-preview-wrapper">
+                <img id="imagePreview" class="image-preview" src="" alt="Image preview" style="display:none;" />
+            </div>
+        </div>
+
+        <div class="text-center">
+            <button type="submit" class="btn btn-success" id="submitBtn">Save Student</button>
+            <a href="{% url 'student_list' %}" class="btn btn-info">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.form-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    transition: border-color 0.3s ease;
+}
+
+.form-input.error {
+    border-color: #dc3545;
+    background-color: #fff5f5;
+}
+
+.error-message {
+    color: #dc3545;
+    font-size: 12px;
+    margin-top: 4px;
+    min-height: 16px;
+}
+
+.form-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.form-input.valid {
+    border-color: #28a745;
+}
+
+.image-preview {
+    display: block;
+    max-width: 180px;
+    max-height: 180px;
+    border-radius: 12px;
+    border: 1px solid #d1d5db;
+    margin-top: 10px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const imageInput = document.getElementById('studentImage');
+    const imagePreview = document.getElementById('imagePreview');
+
+    imageInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (!file) {
+            imagePreview.style.display = 'none';
+            imagePreview.src = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            imagePreview.src = event.target.result;
+            imagePreview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    });
+});
+</script>
+{% endblock %}

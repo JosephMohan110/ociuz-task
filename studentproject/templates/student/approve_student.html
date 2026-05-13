@@ -1,0 +1,28 @@
+{% extends 'student/base.html' %}
+
+{% block content %}
+<div class="form-card" style="text-align: center;">
+    <h2 style="color: #28a745;">Confirm Approval</h2>
+
+    <p>Are you sure you want to <strong>APPROVE</strong> <strong>{{ student.name }}</strong>?</p>
+
+    <div style="background: #f8f9fa; padding: 14px 16px; margin: 18px 0 22px; text-align: left; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04);">
+        <p style="margin: 6px 0;"><strong>Phone:</strong> {{ student.phone }}</p>
+        <p style="margin: 6px 0;"><strong>Email:</strong> {{ student.email }}</p>
+        <p style="margin: 6px 0;"><strong>Course:</strong> {{ student.course }}</p>
+        <p style="margin: 6px 0;"><strong>Current Status:</strong> {{ student.approval_status|upper }}</p>
+    </div>
+
+    <form method="POST">
+        {% csrf_token %}
+        <div class="form-group" style="margin-bottom: 16px; text-align: left;">
+            <label for="remarks"><strong>Approval Remarks</strong> (optional)</label>
+            <textarea id="remarks" name="remarks" rows="3" class="form-control"
+                      style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ced4da;"
+                      placeholder="Add a note for this approval...">{{ remarks }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-success">Yes, Approve</button>
+        <a href="{% url 'student_list' %}" class="btn btn-info">Cancel</a>
+    </form>
+</div>
+{% endblock %}

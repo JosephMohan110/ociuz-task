@@ -1,0 +1,384 @@
+# Activate virtual environment (Python 3.11 env)
+myenv\Scripts\activate
+
+# Create Django project
+django-admin startproject studentproject
+
+# Go inside project folder
+cd studentproject
+
+# Create Django app
+python manage.py startapp student
+
+# Run server to check project
+python manage.py runserver
+
+# Create migration file from models.py changes
+python manage.py makemigrations
+
+# Apply migrations and create tables in database
+python manage.py migrate
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--  CREATE TABLE students (
+--         id SERIAL PRIMARY KEY,
+--         name VARCHAR(100),
+--         age INT
+--     );
+
+-- INSERT INTO students(name, age)
+-- VALUES ('Joseph', 22);
+
+-- INSERT INTO students(name, age)
+-- VALUES ('Joseph', 22);
+
+--SELECT * FROM students;
+
+
+
+--CREAT A READ ONLY USER THING...
+--ionly this  user will later get viewing permission
+
+--CREATE USER readonly_user WITH PASSWORD 'readonly123';
+
+
+
+-- next give database connection acces to above user...
+--tables use cheyan ulla pemmision taken..
+
+--GRANT CONNECT ON DATABASE demo TO readonly_user;
+
+
+
+--now giving the schama access to above user...
+--GRANT USAGE ON SCHEMA public TO readonly_user;
+
+
+
+--now we giving only red ead he table access..
+-- when we give it user cannot modify the data.
+--GRANT SELECT ON students TO readonly_user;
+
+
+--now just verify the read only user for it just login...login with above user and try to select data from students table and also try to insert data into students table to verify the read only access.
+
+--psql -U readonly_user -d demo
+
+
+--verify the read access
+--SELECT * FROM students;
+
+
+--now we want to verify he write access is blocked..
+
+--INSERT INTO students(name, age)
+--VALUES ('Test', 25);
+
+
+
+
+--next task 1
+
+
+-- now above exixting table we are adding 6 coloum.. studen table ku add cheyunu..
+
+-- ALTER TABLE students
+-- ADD COLUMN phone VARCHAR(15),
+-- ADD COLUMN email VARCHAR(100),
+-- ADD COLUMN address TEXT,
+-- ADD COLUMN dob DATE,
+-- ADD COLUMN course VARCHAR(50),
+-- ADD COLUMN status VARCHAR(20);
+
+
+
+
+
+-- next task..2
+
+
+
+-- now kurachu values want to add into  student table..
+
+-- INSERT INTO students (name, age, phone, email, address, dob, course, status) VALUES
+-- ('Akhil', 20, '9876543210', 'akhil@gmail.com', 'Thrissur', '2004-05-15', 'cse', 'Active'),
+-- ('Anjali', 21, '9876543211', 'anjk@gmail.com', 'Ernakulam', '2003-08-22', 'Math', 'Active'),
+-- ('Vishnu', 22, '9876543212', 'vish@gmail.com', 'Thrissur', '2002-11-10', 'Physics', 'Graduated'),
+-- ('Sreya', 20, '9876543213', 'srey@gmail.com', 'Ernakulam', '2004-02-18', 'Chemistry', 'Active'),
+-- ('Arun', 23, '9876543214', 'arun@gmail.com', 'Thrissur', '2001-07-30', 'Bio', 'Graduated'),
+-- ('Divya', 19, '9876543215', 'divy@gmail.com', 'Ernakulam', '2005-01-25', 'cse', 'Active'),
+-- ('Harikrishnan', 22, '9876543216', 'hari@gmail.com', 'Thrissur', '2002-09-12', 'Electronics', 'Active'),
+-- ('Lakshmi', 21, '9876543217', 'lakshmi@gmail.com', 'Ernakulam', '2003-12-05', 'Mech', 'On Leave'),
+-- ('Manoj', 24, '9876543218', 'manoj@gmail.com', 'Thrissur', '2000-06-19', 'Civil', 'Graduated'),
+-- ('Neethu', 20, '9876543219', 'neethu@gmail.com', 'Ernakulam', '2004-03-28', 'cse', 'Active'),
+-- ('Praveen', 22, '9876543220', 'praveen@gmail.com', 'Thrissur', '2002-10-08', 'Electrical', 'Active'),
+-- ('Rahul', 21, '9876543221', 'rahul@gmail.com', 'Ernakulam', '2003-04-17', 'Math', 'Active'),
+-- ('Sandra', 19, '9876543222', 'sandra@gmail.com', 'Thrissur', '2005-07-23', 'Physics', 'Active'),
+-- ('Tom Sebastian', 23, '9876543223', 'tom@gmail.com', 'Ernakulam', '2001-11-02', 'Chemistry', 'Graduated'),
+-- ('Usha Kumari', 20, '9876543224', 'usha@gmail.com', 'Thrissur', '2004-08-14', 'Bio', 'Active'),
+-- ('Vimal Rajesh', 22, '9876543225', 'vimal@gmail.com', 'Ernakulam', '2002-12-26', 'cse', 'Active'),
+-- ('Yam Devi', 21, '9876543226', 'yam@gmail.com', 'Thrissur', '2003-05-09', 'Electronics', 'On Leave'),
+-- ('Abhi', 20, '9876543227', 'abhi@gmail.com', 'Ernakulam', '2004-09-30', 'Mech', 'Active'),
+-- ('Bin', 24, '9876543228', 'bin@gmail.com', 'Thrissur', '2000-01-15', 'Civil', 'Graduated'),
+-- ('Chrit', 19, '9876543229', 'christy@gmail.com', 'Ernakulam', '2005-06-11', 'cse', 'Active');
+
+
+
+-- select * from students;
+
+
+
+
+
+--next task 3
+
+-- now new table want to create table is student approval table
+
+-- CREATE TABLE StudentApproval (
+--     id SERIAL PRIMARY KEY,
+--     student_id INT REFERENCES students(id),
+--     approval_status VARCHAR(50),
+--     approved_by VARCHAR(100),
+--     approved_date DATE,
+--     remarks TEXT,
+--     created_date DATE DEFAULT CURRENT_DATE
+-- );
+
+
+
+
+
+-- now add some values in to above tble...
+-- INSERT INTO StudentApproval (student_id, approval_status, approved_by, approved_date, remarks, created_date) VALUES
+-- (1, 'Approved', 'Admin', '2024-01-15', 'All documents verified', '2024-01-10'),
+-- (2, 'Approved', 'Admin', '2024-01-20', 'Eligible for graduation', '2024-01-18'),
+-- (3, 'Rejected', 'Admin', '2024-01-25', 'Incomplete documents', '2024-01-22'),
+-- (4, 'Approved', 'Staff', '2024-02-01', 'Verified', '2024-01-30');
+
+
+
+
+-- select * FROM studentapproval;
+
+
+
+
+-- next task 4 approve functioon
+
+
+--ow making a function to approve student records
+-- buy using this function we can appriove the students..
+-- name of function is fnApproveStudent and it takes 3 parameters
+-- student id, approved by and remarks
+-- and it will return text message about the approval status of the student.
+-- parameters means inputs..
+--$$ it will act as a seprater. after this symbol the function logic will start...
+-- instread of many quirs we can do it with one function.. and also we can reuse the function for many times..
+-- and also we can call the function from other queries also..
+
+
+
+-- CREATE OR REPLACE FUNCTION fnApproveStudent(
+--     p_student_id INT,
+--     p_approved_by VARCHAR
+-- )
+-- RETURNS VOID AS $$
+-- BEGIN
+--     -- Insert approval record
+--     INSERT INTO StudentApproval (student_id, approval_status, approved_by, approved_date, created_date)
+--     VALUES (p_student_id, 'Approved', p_approved_by, CURRENT_DATE, CURRENT_DATE);
+    
+--     -- Update student status
+--     UPDATE students SET status = 'Approved' WHERE id = p_student_id;
+    
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+
+-- useing the function...
+-- SELECT fnApproveStudent(1, 'John');
+-- SELECT fnApproveStudent(2, 'Admin');
+-- SELECT fnApproveStudent(3, 'Staff');
+
+-- SELECT * FROM StudentApproval WHERE student_id = 4;
+-- SELECT * FROM StudentApproval;
+
+
+
+
+-- adding values using the function....
+--SELECT fnApproveStudent(14, 'Admin');
+--SELECT * FROM StudentApproval;
+
+
+
+
+
+
+
+
+-- next taks 5
+-- this task create a custom listimg function...
+
+-- -- create means make a new connection.. function name is fnGetApprovedStudents.
+
+
+
+
+-- CREATE OR REPLACE FUNCTION fnGetApprovedStudents()
+
+-- -- tables values evida return cheyum coloum names is given here....
+
+-- RETURNS TABLE(
+--     student_name VARCHAR,
+--     course_name VARCHAR,
+--     phone_number VARCHAR,
+--     email_address VARCHAR,
+--     approval_status VARCHAR
+-- ) AS $$  
+
+-- BEGIN
+
+--     RETURN QUERY
+
+--     SELECT 
+--         s.name,   
+   -- course name from student table
+--         s.course,
+--         s.phone,
+--         s.email,
+--         a.approval_status
+-- approved status came from apprived table...
+
+-- -- s and a is short forms of table name..  s means student table, a means StudentApproval
+
+--     FROM students s
+
+--     INNER JOIN StudentApproval a ON s.id = a.student_id
+--     WHERE a.approval_status = 'Approved';
+
+-- -- approved student only will show/... filtering it with where..
+
+-- -- inner join is user so intersection will table
+
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+-- SELECT id, name, status FROM students;
+-- SELECT * FROM StudentApproval;
+
+
+
+-- SELECT * FROM fnGetApprovedStudents();
+
+
+
+-- SELECT * FROM StudentApproval;
+
+-- SELECT fnApproveStudent(15, 'Admin');
+
+
+-- SELECT * FROM StudentApproval;
+
+
+-- SELECT * FROM fnGetApprovedStudents();
+
+
+
+
+
+
+
+
+-- task 6 trigger
+
+--trigger function 
+-- ee function use cheyuthu all values na triger cheyum.
+-- oru table print cheyam aa table ill approveed data mathram indavam padullu...
+-- student table laa all data na for loop vachu ittracte cheyum and all value na print cheyum.
+-- print cheyunathinu mubu TRIGGER funnction use cheyuthu all value or data ya print cheyunathinu pakaram
+-- approved values na mathram print cheyum...
+-- other all values na print cheyatha approved row na mathram print cheyum...
+
+
+-- -- -- function is created..
+-- CREATE OR REPLACE FUNCTION show_students()
+-- RETURNS TRIGGER AS $$  
+-- --trigger values will return here in above sentance..
+-- DECLARE
+--     s RECORD;  
+--     -- a variible is created.. in varible s id, name, age , course, all will store
+-- BEGIN
+
+--     -- it will take each stdent data from the student table one by one using a loop.
+--     --varible s na use cheyuthu for loop vachu student table laa data na ittracte cheyum and all value na print cheyum.
+
+--     FOR s IN SELECT * FROM StudentApproval LOOP
+
+--         -- approved peoples indo nu nokum from table student. s is student table.
+--         -- student table ill approved status na nokum..  s.status means student table ill status coloum na nokum.. 
+--         --and if condition use cheyuthu approved status indo nu nokum..
+
+--         IF s.approval_status = 'Approved' THEN
+
+--             -- from student table appoved status table will print...
+--             -- it is denote as s.id, s.name, s.course ... .. we should use % itself we cant use table name.
+--             -- if we give it as s,id psql conside as a text or string..
+--             RAISE NOTICE 'Approved Student: %, %, %, %',
+--                 s.id, s.name, s.course, s.status;
+
+--         END IF;
+
+--     END LOOP;
+
+--     RETURN NULL;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+-- CREATE TRIGGER student_trigger
+-- AFTER INSERT OR UPDATE OR DELETE
+-- ON students
+-- FOR EACH ROW
+-- EXECUTE FUNCTION show_students();
+
+
+-- UPDATE students
+-- SET status = 'Approved'
+-- WHERE id = 1;
+
+-- INSERT INTO students(name, age, course, status)
+-- VALUES ('Test Student', 21, 'BCA', 'Approved');
+
+
+-- INSERT INTO students(name, age, course, status)
+-- VALUES ('New Student', 21, 'BCA', 'Approved');
+
+
+-- SELECT * FROM students;
+-- SELECT * FROM StudentApproval;

@@ -1,0 +1,490 @@
+{% extends 'student/base.html' %}
+
+{% block content %}
+<div class="search-container">
+    <!-- Search Box with Real-time Results -->
+    <div class="search-box">
+        <div style="position: relative; flex: 1;">
+            <input type="text" id="searchInput" placeholder="Search by name, phone, email, course..." value="{{ search_keyword }}" 
+                   class="search-input" autocomplete="off">
+            <div id="searchResults" class="search-results-dropdown" style="display: none;"></div>
+        </div>
+        <a href="{% url 'student_list' %}" class="btn btn-info" id="clearBtn" style="display: {% if search_keyword %}inline-flex{% else %}none{% endif %};">Clear</a>
+    </div>
+
+    <!-- Results Count -->
+    <div id="resultsInfo" style="margin: 10px 0; color: #6b7280; font-size: 13px;"></div>
+</div>
+
+<table id="studentsTable">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Photo</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Course</th>
+            <th>Status</th>
+            <th>Approved By</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody id="tableBody">
+        {% for student in students %}
+        <tr>
+            <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
+            <td>
+                {% if student.student_image %}
+                <img src="{{ MEDIA_URL }}{{ student.student_image }}" alt="{{ student.name }}" class="student-thumb">
+                {% else %}
+                —
+                {% endif %}
+            </td>
+            <td>{{ student.name }}</td>
+            <td>{{ student.phone }}</td>
+            <td>{{ student.email }}</td>
+            <td>
+                {{ student.course|default:'Not assigned' }}
+                {% if student.course_code %} ({{ student.course_code }}){% endif %}
+            </td>
+
+            {# Status comes from student_approval table (joined in db_functions) #}
+            <td>
+                <span class="status-badge status-{{ student.approval_status|lower }}">
+                    {{ student.approval_status|upper }}
+                </span>
+            </td>
+
+            <td>{{ student.approved_by|default:"—" }}</td>
+
+            <td>
+                <div class="action-buttons">
+                    <a href="{% url 'edit_student' student.id %}" class="btn btn-primary">Edit</a>
+                    <a href="{% url 'delete_student' student.id %}" class="btn btn-danger">Delete</a>
+                    <a href="{% url 'approval_history' student.id %}" class="btn btn-info">History</a>
+
+                    {# Approve / Reject only shown for Pending students #}
+                    {% if student.approval_status == 'Pending' %}
+                    <a href="{% url 'approve_student' student.id %}" class="btn btn-success">Approve</a>
+                    <a href="{% url 'reject_student' student.id %}" class="btn btn-danger">Reject</a>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="9" class="empty-state">No students found. <a href="{% url 'add_student' %}">Add a student</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- PAGINATION SECTION - Always Show -->
+<div class="pagination-container">
+    <div class="pagination-info">
+        <span class="info-text">
+            Showing <strong>{{ page_obj.start_index|default:0 }}-{{ page_obj.end_index|default:0 }}</strong> of <strong>{{ paginator.count }}</strong> students 
+            | <strong>{{ paginator.per_page }}</strong> per page
+            | Page <strong>{{ page_obj.number }}</strong> of <strong>{{ paginator.num_pages }}</strong>
+        </span>
+    </div>
+
+    <div class="pagination">
+        {% with q=search_keyword %}
+            <!-- First & Previous -->
+            {% if page_obj.has_previous %}
+                <a class="btn btn-outline" href="{% url 'student_list' %}?page=1{% if q %}&search={{ q|urlencode }}{% endif %}" title="First Page">
+                    <span>⏮ First</span>
+                </a>
+                <a class="btn btn-outline" href="{% url 'student_list' %}?page={{ page_obj.previous_page_number }}{% if q %}&search={{ q|urlencode }}{% endif %}" title="Previous Page">
+                    <span>« Previous</span>
+                </a>
+            {% else %}
+                <span class="btn btn-disabled">⏮ First</span>
+                <span class="btn btn-disabled">« Previous</span>
+            {% endif %}
+
+            <!-- Page Numbers -->
+            {% for num in paginator.page_range %}
+                {% if num == 1 or num == paginator.num_pages or num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
+                    <a class="btn {% if num == page_obj.number %}btn-active{% else %}btn-outline{% endif %}"
+                       href="{% url 'student_list' %}?page={{ num }}{% if q %}&search={{ q|urlencode }}{% endif %}">{{ num }}</a>
+                {% elif num == page_obj.number|add:-3 or num == page_obj.number|add:3 %}
+                    <span class="pagination-dots">…</span>
+                {% endif %}
+            {% endfor %}
+
+            <!-- Next & Last -->
+            {% if page_obj.has_next %}
+                <a class="btn btn-outline" href="{% url 'student_list' %}?page={{ page_obj.next_page_number }}{% if q %}&search={{ q|urlencode }}{% endif %}" title="Next Page">
+                    <span>Next »</span>
+                </a>
+                <a class="btn btn-outline" href="{% url 'student_list' %}?page={{ paginator.num_pages }}{% if q %}&search={{ q|urlencode }}{% endif %}" title="Last Page">
+                    <span>Last ⏭</span>
+                </a>
+            {% else %}
+                <span class="btn btn-disabled">Next »</span>
+                <span class="btn btn-disabled">Last ⏭</span>
+            {% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<style>
+.search-container {
+    margin-bottom: 20px;
+}
+
+.search-box {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.search-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 12px 14px;
+    border: 2px solid #dbe3f1;
+    border-radius: 8px;
+    outline: none;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 8px rgba(2, 6, 23, 0.05);
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.search-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-results-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.search-result-item {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-item:hover {
+    background: #f8fafc;
+}
+
+.student-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    display: block;
+}
+
+.search-result-item-name {
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 6px;
+    font-size: 17px;
+}
+
+.search-result-item-details {
+    font-size: 15px;
+    color: #374151;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.search-result-item-details span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.search-result-item-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 6px;
+}
+
+.status-pending {
+    background: #ffc107;
+    color: #333;
+}
+
+.status-approved {
+    background: #28a745;
+    color: white;
+}
+
+.status-rejected {
+    background: #dc3545;
+    color: white;
+}
+
+#resultsInfo {
+    display: none;
+    text-align: right;
+}
+
+#resultsInfo.show {
+    display: block;
+}
+
+.search-box .btn {
+    flex-shrink: 0;
+}
+
+/* PAGINATION STYLES */
+.pagination-container {
+    margin-top: 30px;
+    padding: 20px;
+    background: linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.pagination-info {
+    text-align: center;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: white;
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+}
+
+.info-text {
+    font-size: 14px;
+    color: #374151;
+    line-height: 1.6;
+}
+
+.info-text strong {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pagination .btn {
+    padding: 10px 14px;
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #374151;
+    text-decoration: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.pagination .btn:hover:not(.btn-disabled, .btn-active) {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pagination .btn-active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.pagination .btn-disabled {
+    background: #f3f4f6;
+    color: #9ca3af;
+    cursor: not-allowed;
+    border-color: #e5e7eb;
+}
+
+.pagination .btn-outline {
+    background: white;
+    border: 1px solid #d1d5db;
+}
+
+.pagination-dots {
+    color: #9ca3af;
+    font-weight: 600;
+    padding: 0 4px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+    const clearBtn = document.getElementById('clearBtn');
+    const resultsInfo = document.getElementById('resultsInfo');
+    const searchApiUrl = "{% url 'search_api' %}";
+    let searchTimeout;
+
+    // Make sure elements exist
+    if (!searchInput || !searchResults) {
+        return;
+    }
+
+    // Real-time search on input - trigger immediately as user types
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+
+        // Clear timeout
+        clearTimeout(searchTimeout);
+
+        // Show clear button if searching
+        if (query.length > 0) {
+            clearBtn.style.display = 'inline-flex';
+        } else {
+            clearBtn.style.display = 'none';
+            searchResults.style.display = 'none';
+            resultsInfo.classList.remove('show');
+            return;
+        }
+
+        // Only search if at least 1 character
+        if (query.length < 1) {
+            return;
+        }
+
+        // Show loading state
+        searchResults.innerHTML = '<div class="search-result-item" style="text-align: center; color: #6b7280; padding: 20px;">Searching...</div>';
+        searchResults.style.display = 'block';
+
+        // Debounce search (wait 300ms after user stops typing)
+        searchTimeout = setTimeout(() => {
+            performSearch(query);
+        }, 300);
+    });
+
+    // Perform search via API
+    function performSearch(query) {
+        const apiUrl = `${searchApiUrl}?q=${encodeURIComponent(query)}`;
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                displayResults(data.results, query);
+            })
+            .catch(error => {
+                searchResults.innerHTML = '<div class="search-result-item" style="text-align: center; color: #dc3545;">Error loading results</div>';
+                searchResults.style.display = 'block';
+            });
+    }
+
+    // Display search results
+    function displayResults(results, query) {
+        console.log('Displaying results:', results.length, 'for query:', query);
+
+        if (!results || results.length === 0) {
+            searchResults.innerHTML = '<div class="search-result-item" style="text-align: center; color: #9ca3af; padding: 15px;">No students found</div>';
+            searchResults.style.display = 'block';
+            resultsInfo.textContent = `0 results for "${query}"`;
+            resultsInfo.classList.add('show');
+            return;
+        }
+
+        let html = '';
+        results.forEach(student => {
+            const statusClass = `status-${student.approval_status.toLowerCase()}`;
+            html += `
+                <div class="search-result-item" onclick="selectStudent(${student.id})">
+                    <div class="search-result-item-name">${escapeHtml(student.name)}</div>
+                    <div class="search-result-item-details">
+                        <span>📧 ${escapeHtml(student.email)}</span>
+                        <span>📱 ${escapeHtml(student.phone)}</span>
+                        <span>📚 ${escapeHtml(student.course)}</span>
+                        <span class="search-result-item-badge ${statusClass}">${student.approval_status}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        searchResults.innerHTML = html;
+        searchResults.style.display = 'block';
+        resultsInfo.textContent = `${results.length} result${results.length !== 1 ? 's' : ''} for "${query}"`;
+        resultsInfo.classList.add('show');
+    }
+
+    // Select a student from dropdown
+    window.selectStudent = function(studentId) {
+        console.log('Selecting student:', studentId);
+        // Redirect to edit page using Django reverse URL
+        const editUrl = "{% url 'edit_student' 0 %}".replace('0', studentId);
+        window.location.href = editUrl;
+    };
+
+    // Escape HTML special characters
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return String(text).replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+            searchResults.style.display = 'none';
+        }
+    });
+
+    // Show dropdown again when focusing on input
+    searchInput.addEventListener('focus', function() {
+        if (this.value.trim().length > 0 && searchResults.innerHTML) {
+            searchResults.style.display = 'block';
+        }
+    });
+
+    // Prevent form submission on Enter in search
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}

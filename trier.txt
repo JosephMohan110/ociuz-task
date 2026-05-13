@@ -1,0 +1,70 @@
+
+
+-- task 6 trigger
+
+--trigger function 
+-- ee function use cheyuthu all values na triger cheyum.
+-- oru table print cheyam aa table ill approveed data mathram indavam padullu...
+-- student table laa all data na for loop vachu ittracte cheyum and all value na print cheyum.
+-- print cheyunathinu mubu TRIGGER funnction use cheyuthu all value or data ya print cheyunathinu pakaram
+-- approved values na mathram print cheyum...
+-- other all values na print cheyatha approved row na mathram print cheyum...
+
+
+-- -- -- function is created..
+-- CREATE OR REPLACE FUNCTION show_students()
+-- RETURNS TRIGGER AS $$  
+-- --trigger values will return here in above sentance..
+-- DECLARE
+--     s RECORD;  
+--     -- a variible is created.. in varible s id, name, age , course, all will store
+-- BEGIN
+
+--     -- it will take each stdent data from the student table one by one using a loop.
+--     --varible s na use cheyuthu for loop vachu student table laa data na ittracte cheyum and all value na print cheyum.
+
+--     FOR s IN SELECT * FROM StudentApproval LOOP
+
+--         -- approved peoples indo nu nokum from table student. s is student table.
+--         -- student table ill approved status na nokum..  s.status means student table ill status coloum na nokum.. 
+--         --and if condition use cheyuthu approved status indo nu nokum..
+
+--         IF s.approval_status = 'Approved' THEN
+
+--             -- from student table appoved status table will print...
+--             -- it is denote as s.id, s.name, s.course ... .. we should use % itself we cant use table name.
+--             -- if we give it as s,id psql conside as a text or string..
+--             RAISE NOTICE 'Approved Student: %, %, %, %',
+--                 s.id, s.name, s.course, s.status;
+
+--         END IF;
+
+--     END LOOP;
+
+--     RETURN NULL;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+-- CREATE TRIGGER student_trigger
+-- AFTER INSERT OR UPDATE OR DELETE
+-- ON students
+-- FOR EACH ROW
+-- EXECUTE FUNCTION show_students();
+
+
+-- UPDATE students
+-- SET status = 'Approved'
+-- WHERE id = 1;
+
+-- INSERT INTO students(name, age, course, status)
+-- VALUES ('Test Student', 21, 'BCA', 'Approved');
+
+
+-- INSERT INTO students(name, age, course, status)
+-- VALUES ('New Student', 21, 'BCA', 'Approved');
+
+
+-- SELECT * FROM students;
+-- SELECT * FROM StudentApproval;

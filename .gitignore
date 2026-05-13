@@ -1,0 +1,8 @@
+env/
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+.zip
+*.log
+1.00-thu-5-13-26.zip

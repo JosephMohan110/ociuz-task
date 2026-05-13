@@ -12,6 +12,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.shortcuts import render, redirect
+from django.urls import reverse
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.http import JsonResponse
@@ -211,6 +212,7 @@ def edit_student(request, student_id):
         messages.error(request, 'Student not found.')
         return redirect('student_list')
 
+    page = request.GET.get('page', '').strip() if request.method == 'GET' else request.POST.get('page', '').strip()
     courses = db_get_courses()
     form_data = {
         'name':   student['name'],
@@ -236,12 +238,15 @@ def edit_student(request, student_id):
             messages.info(request,
                 f'"{name}" updated successfully. Status reset to Pending for re-approval.')
 
+            if page:
+                return redirect(f'{reverse("student_list")}?page={page}')
             return redirect('student_list')
 
     return render(request, 'student/edit_student.html', {
         'student':   student,
         'form_data': form_data,
         'courses':   courses,
+        'page':      page,
     })
 
 
@@ -582,6 +587,78 @@ def api_update_student(request, student_id):
             return JsonResponse({'error': 'Failed to update student'}, status=500)
     except Exception as e:
         return JsonResponse({'error': 'Failed to update student', 'details': str(e)}, status=500)
+
+
+def api_approve_student(request, student_id):
+    # """
+    # API endpoint to approve a student.
+    # Accepts POST with optional remarks and approved_by.
+    # """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    student = db_get_student_by_id(student_id)
+    if not student:
+        return JsonResponse({'error': 'Student not found'}, status=404)
+
+    if student['approval_status'] != 'Pending':
+        return JsonResponse({'error': f'Student is already {student["approval_status"]}.'}, status=400)
+
+    remarks = request.POST.get('remarks', '').strip()
+    approved_by = request.POST.get('approved_by', '').strip() or 'Admin'
+
+    try:
+        db_approve_student(student_id, approved_by=approved_by, remarks=remarks)
+        updated_student = db_get_student_by_id(student_id)
+        return JsonResponse({
+            'success': True,
+            'message': f'Student "{updated_student["name"]}" approved successfully.',
+            'student': {
+                'id': updated_student['id'],
+                'approval_status': updated_student['approval_status'],
+                'approved_by': updated_student['approved_by'],
+                'remarks': updated_student['remarks'],
+                'approved_date': updated_student['approved_date'].isoformat() if updated_student['approved_date'] else None,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'error': 'Failed to approve student', 'details': str(e)}, status=500)
+
+
+def api_reject_student(request, student_id):
+    # """
+    # API endpoint to reject a student.
+    # Accepts POST with optional remarks and approved_by.
+    # """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    student = db_get_student_by_id(student_id)
+    if not student:
+        return JsonResponse({'error': 'Student not found'}, status=404)
+
+    if student['approval_status'] != 'Pending':
+        return JsonResponse({'error': f'Student is already {student["approval_status"]}.'}, status=400)
+
+    remarks = request.POST.get('remarks', '').strip()
+    approved_by = request.POST.get('approved_by', '').strip() or 'Admin'
+
+    try:
+        db_reject_student(student_id, approved_by=approved_by, remarks=remarks)
+        updated_student = db_get_student_by_id(student_id)
+        return JsonResponse({
+            'success': True,
+            'message': f'Student "{updated_student["name"]}" rejected successfully.',
+            'student': {
+                'id': updated_student['id'],
+                'approval_status': updated_student['approval_status'],
+                'approved_by': updated_student['approved_by'],
+                'remarks': updated_student['remarks'],
+                'approved_date': updated_student['approved_date'].isoformat() if updated_student['approved_date'] else None,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'error': 'Failed to reject student', 'details': str(e)}, status=500)
 
 
 def api_get_students(request):

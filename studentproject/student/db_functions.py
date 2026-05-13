@@ -29,7 +29,7 @@ def db_get_all_students(search_keyword=''):
     # """
     with connection.cursor() as cur:
         cur.execute(
-            "SELECT * FROM fnGetStudentsWithStatus(%s)",
+            "SELECT * FROM fnGetStudentsWithCurrentCourse(%s)",
             [search_keyword or None]
         )
         return _fetchall(cur)
@@ -41,34 +41,7 @@ def db_get_student_by_id(student_id):
     # """
     with connection.cursor() as cur:
         cur.execute(
-            """
-            SELECT
-                s.id,
-                s.name,
-                s.phone,
-                s.email,
-                s.course_id,
-                COALESCE(c.course_name, 'Not assigned') AS course,
-                COALESCE(c.course_code, '') AS course_code,
-                s.student_image,
-                s.created_date,
-                s.updated_date,
-                COALESCE(a.approval_status, 'Pending') AS approval_status,
-                COALESCE(a.approved_by, 'System') AS approved_by,
-                COALESCE(a.remarks, '') AS remarks,
-                a.approved_date
-            FROM students s
-            LEFT JOIN tblCourse c ON s.course_id = c.course_id
-            LEFT JOIN LATERAL (
-                SELECT sa.approval_status, sa.approved_by, sa.remarks, sa.approved_date
-                FROM student_approval sa
-                WHERE sa.student_id = s.id
-                ORDER BY sa.id DESC
-                LIMIT 1
-            ) a ON TRUE
-            WHERE s.id = %s
-            LIMIT 1
-            """,
+            "SELECT * FROM fnGetStudentById(%s)",
             [student_id]
         )
         return _fetchone(cur)

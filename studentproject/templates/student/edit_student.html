@@ -17,6 +17,7 @@
 
     <form method="POST" id="studentForm" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
+        {% if page %}<input type="hidden" name="page" value="{{ page }}">{% endif %}
 
         <div class="form-group">
             <label>Student Name *</label>

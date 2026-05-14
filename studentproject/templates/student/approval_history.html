@@ -47,7 +47,7 @@
                     </p>
                 </div>
                 <div style="text-align: right; color: #6b7280; font-size: 13px;">
-                    {{ event.approved_date|date:"M d, Y H:i" }}
+                    {{ event.approved_date|date:"M d, Y" }}
                 </div>
             </div>
 
@@ -69,8 +69,8 @@
 
     <!-- Action Buttons -->
     <div style="margin-top: 24px; display: flex; gap: 10px; justify-content: center;">
-        <a href="{% url 'edit_student' student.id %}" class="btn btn-primary">Edit Student</a>
-        <a href="{% url 'student_list' %}" class="btn btn-info">Back to List</a>
+        <a href="{% url 'edit_student' student.id %}{% if page %}?page={{ page }}{% endif %}" class="btn btn-primary">Edit Student</a>
+        <a href="{% url 'student_list' %}{% if page %}?page={{ page }}{% endif %}" class="btn btn-info">Back to List</a>
     </div>
 </div>
 

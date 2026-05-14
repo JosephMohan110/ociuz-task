@@ -73,6 +73,7 @@
             <div class="image-preview-wrapper">
                 <img id="imagePreview" class="image-preview" src="" alt="Image preview" style="display:none;" />
             </div>
+            <div class="error-message" id="studentImage-error"></div>
         </div>
 
         <div class="text-center">
@@ -225,23 +226,120 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const studentForm = document.getElementById('studentForm');
+    const nameInput = document.getElementById('name');
+    const phoneInput = document.getElementById('phone');
+    const emailInput = document.getElementById('email');
+    const courseInput = document.getElementById('course');
     const imageInput = document.getElementById('studentImage');
     const imagePreview = document.getElementById('imagePreview');
 
-    imageInput.addEventListener('change', function() {
-        const file = this.files[0];
+    const errorElements = {
+        name: document.getElementById('name-error'),
+        phone: document.getElementById('phone-error'),
+        email: document.getElementById('email-error'),
+        course: document.getElementById('course-error'),
+        studentImage: document.getElementById('studentImage-error')
+    };
+
+    const validators = {
+        name: function(value) {
+            if (!value.trim()) return 'Name is required.';
+            if (!/^[A-Za-z\s]+$/.test(value)) return 'Name must contain only letters and spaces.';
+            return '';
+        },
+        phone: function(value) {
+            if (!value.trim()) return 'Phone number is required.';
+            if (!/^[6-9]\d{9}$/.test(value)) return 'Phone must be a valid 10-digit mobile number.';
+            return '';
+        },
+        email: function(value) {
+            if (!value.trim()) return 'Email is required.';
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Enter a valid email address.';
+            return '';
+        },
+        course: function(value) {
+            if (!value) return 'Course selection is required.';
+            return '';
+        }
+    };
+
+    function setError(input, message) {
+        if (message) {
+            input.classList.add('error');
+            input.classList.remove('valid');
+            errorElements[input.id].textContent = message;
+        } else {
+            input.classList.remove('error');
+            input.classList.add('valid');
+            errorElements[input.id].textContent = '';
+        }
+    }
+
+    function validateField(input) {
+        const message = validators[input.id](input.value);
+        setError(input, message);
+        return !message;
+    }
+
+    function validateImage() {
+        const file = imageInput.files[0];
         if (!file) {
             imagePreview.style.display = 'none';
             imagePreview.src = '';
-            return;
+            errorElements.studentImage.textContent = '';
+            return true;
         }
 
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+            imagePreview.style.display = 'none';
+            imagePreview.src = '';
+            errorElements.studentImage.textContent = 'Only JPG, PNG, or GIF images are allowed.';
+            return false;
+        }
+
+        if (file.size > 2 * 1024 * 1024) {
+            imagePreview.style.display = 'none';
+            imagePreview.src = '';
+            errorElements.studentImage.textContent = 'Image size must be 2MB or less.';
+            return false;
+        }
+
+        errorElements.studentImage.textContent = '';
         const reader = new FileReader();
         reader.onload = function(event) {
             imagePreview.src = event.target.result;
             imagePreview.style.display = 'block';
         };
         reader.readAsDataURL(file);
+        return true;
+    }
+
+    nameInput.addEventListener('input', function() {
+        validateField(nameInput);
+    });
+    phoneInput.addEventListener('input', function() {
+        validateField(phoneInput);
+    });
+    emailInput.addEventListener('input', function() {
+        validateField(emailInput);
+    });
+    courseInput.addEventListener('change', function() {
+        validateField(courseInput);
+    });
+    imageInput.addEventListener('change', validateImage);
+
+    studentForm.addEventListener('submit', function(event) {
+        const validName = validateField(nameInput);
+        const validPhone = validateField(phoneInput);
+        const validEmail = validateField(emailInput);
+        const validCourse = validateField(courseInput);
+        const validImage = validateImage();
+
+        if (!validName || !validPhone || !validEmail || !validCourse || !validImage) {
+            event.preventDefault();
+        }
     });
 });
 </script>

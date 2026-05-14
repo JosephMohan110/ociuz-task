@@ -61,13 +61,13 @@
             <td>
                 <div class="action-buttons">
                     <a href="{% url 'edit_student' student.id %}?page={{ page_obj.number }}" class="btn btn-primary">Edit</a>
-                    <a href="{% url 'delete_student' student.id %}" class="btn btn-danger">Delete</a>
-                    <a href="{% url 'approval_history' student.id %}" class="btn btn-info">History</a>
+                    <a href="{% url 'delete_student' student.id %}?page={{ page_obj.number }}" class="btn btn-danger">Delete</a>
+                    <a href="{% url 'approval_history' student.id %}?page={{ page_obj.number }}" class="btn btn-info">History</a>
 
                     {# Approve / Reject only shown for Pending students #}
                     {% if student.approval_status == 'Pending' %}
-                    <a href="{% url 'approve_student' student.id %}" class="btn btn-success">Approve</a>
-                    <a href="{% url 'reject_student' student.id %}" class="btn btn-danger">Reject</a>
+                    <a href="{% url 'approve_student' student.id %}?page={{ page_obj.number }}" class="btn btn-success">Approve</a>
+                    <a href="{% url 'reject_student' student.id %}?page={{ page_obj.number }}" class="btn btn-danger">Reject</a>
                     {% endif %}
                 </div>
             </td>

@@ -262,12 +262,17 @@ def delete_student(request, student_id):
         messages.error(request, 'Student not found.')
         return redirect('student_list')
 
+    page = request.GET.get('page', '').strip()
+
     if request.method == 'POST':
+        page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
         db_delete_student(student_id)
         messages.success(request, f'Student "{student["name"]}" deleted.')
+        if page:
+            return redirect(f'{reverse("student_list")}?page={page}')
         return redirect('student_list')
 
-    return render(request, 'student/delete_student.html', {'student': student})
+    return render(request, 'student/delete_student.html', {'student': student, 'page': page})
 
 
 # APPROVE STUDENT
@@ -288,15 +293,21 @@ def approve_student(request, student_id):
             f'"{student["name"]}" is already {student["approval_status"]}.')
         return redirect('student_list')
 
+    page = request.GET.get('page', '').strip()
+
     if request.method == 'POST':
         remarks = request.POST.get('remarks', '').strip()
+        page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
         db_approve_student(student_id, approved_by='Admin', remarks=remarks)
         messages.success(request, f'"{student["name"]}" approved successfully.')
+        if page:
+            return redirect(f'{reverse("student_list")}?page={page}')
         return redirect('student_list')
 
     return render(request, 'student/approve_student.html', {
         'student': student,
         'remarks': '',
+        'page': page,
     })
 
 
@@ -318,15 +329,21 @@ def reject_student(request, student_id):
             f'"{student["name"]}" is already {student["approval_status"]}.')
         return redirect('student_list')
 
+    page = request.GET.get('page', '').strip()
+
     if request.method == 'POST':
         remarks = request.POST.get('remarks', '').strip()
+        page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
         db_reject_student(student_id, approved_by='Admin', remarks=remarks)
         messages.success(request, f'"{student["name"]}" rejected.')
+        if page:
+            return redirect(f'{reverse("student_list")}?page={page}')
         return redirect('student_list')
 
     return render(request, 'student/reject_student.html', {
         'student': student,
         'remarks': '',
+        'page': page,
     })
 
 
@@ -343,10 +360,12 @@ def view_approval_history(request, student_id):
         return redirect('student_list')
 
     history = db_get_approval_history(student_id)
+    page = request.GET.get('page', '').strip()
 
     return render(request, 'student/approval_history.html', {
         'student': student,
         'history': history,
+        'page': page,
     })
 
 

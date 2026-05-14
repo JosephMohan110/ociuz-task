@@ -15,8 +15,9 @@
 
     <form method="POST">
         {% csrf_token %}
+        {% if page %}<input type="hidden" name="page" value="{{ page }}">{% endif %}
         <button type="submit" class="btn btn-danger">Yes, Delete</button>
-        <a href="{% url 'student_list' %}" class="btn btn-info">Cancel</a>
+        <a href="{% url 'student_list' %}{% if page %}?page={{ page }}{% endif %}" class="btn btn-info">Cancel</a>
     </form>
 </div>
 {% endblock %}

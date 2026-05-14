@@ -1,4 +1,14 @@
 
+The ProgrammingError has been resolved. The issue was a type mismatch in the PostgreSQL function fnGetStudentsWithCurrentCourse: the approved_date column in the studentapproval table was of type date, but the function's return type expected timestamp without time zone.
+
+To fix this:
+
+Updated the SQL functions: Added a cast ::timestamp without time zone to a.approved_date in the SELECT queries of both fnGetStudentsWithCurrentCourse and fnGetStudentById in PG local.session.sql.
+Altered the table schema: Modified fix_table.sql to include an ALTER TABLE studentapproval ALTER COLUMN approved_date TYPE TIMESTAMP WITHOUT TIME ZONE; to ensure the column type matches the function's expectations.
+
+
+
+
 
 -- task 6 trigger
 

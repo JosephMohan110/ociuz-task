@@ -15,6 +15,7 @@
 
     <form method="POST">
         {% csrf_token %}
+        {% if page %}<input type="hidden" name="page" value="{{ page }}">{% endif %}
         <div class="form-group" style="margin-bottom: 16px; text-align: left;">
             <label for="remarks"><strong>Rejection Remarks</strong> (optional)</label>
             <textarea id="remarks" name="remarks" rows="3" class="form-control"
@@ -22,7 +23,7 @@
                       placeholder="Add a note for this rejection...">{{ remarks }}</textarea>
         </div>
         <button type="submit" class="btn btn-warning">Yes, Reject</button>
-        <a href="{% url 'student_list' %}" class="btn btn-info">Cancel</a>
+        <a href="{% url 'student_list' %}{% if page %}?page={{ page }}{% endif %}" class="btn btn-info">Cancel</a>
     </form>
 </div>
 {% endblock %}

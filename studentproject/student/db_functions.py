@@ -97,7 +97,7 @@ def db_update_student(student_id, name, phone, email, course_id, student_image_p
     with transaction.atomic():
         with connection.cursor() as cur:
             cur.execute(
-                "SELECT fnEditStudent(%s, %s, %s, %s, %s, %s)",
+                "SELECT fnEditStudent(%s, %s, %s, %s, %s, %s, NULL, NULL, NULL)",
                 [student_id, name, phone, email, course_id, student_image_path]
             )
             return cur.fetchone()[0]

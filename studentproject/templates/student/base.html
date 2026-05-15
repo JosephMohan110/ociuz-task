@@ -344,6 +344,13 @@
                 <a href="{% url 'add_student' %}">Add Student</a>
             </div>
         </div>
+
+        <div class="nav">
+            <a href="{% url 'student_list' %}">Home</a>
+            <a href="{% url 'add_student' %}">Add Student</a>
+            <!-- Add this link to access the soft-deleted records -->
+            <a href="{% url 'deleted_students_list' %}" style="color: #dc3545;">Trash (Deleted)</a>
+        </div>
         
         <div class="content">
             {% if messages %}

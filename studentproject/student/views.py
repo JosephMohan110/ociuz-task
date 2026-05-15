@@ -24,6 +24,8 @@ from .db_functions import (
     db_add_student,
     db_update_student,
     db_delete_student,
+    db_restore_student,
+    db_get_deleted_students,
     db_approve_student,
     db_reject_student,
     db_get_approval_history,
@@ -32,64 +34,7 @@ from .db_functions import (
 )
 
 
-# SHARED FORM VALIDATION
-
-def _validate_form(request, name, phone, email, course, exclude_id=None):
-    # """
-    # Validate student form fields.
-    # Adds a django error-message for every problem found.
-    # Returns True if ANY field is invalid (has_error), False if all OK.
-    # """
-    has_error = False
-
-    # Name
-    if not name:
-        messages.error(request, 'Name is required.')
-        has_error = True
-    elif not re.match(r'^[A-Za-z\s]+$', name):
-        messages.error(request, 'Name must contain only letters and spaces.')
-        has_error = True
-
-    # Phone
-    if not phone:
-        messages.error(request, 'Phone number is required.')
-        has_error = True
-    elif not phone.isdigit() or len(phone) != 10:
-        messages.error(request, 'Phone number must be exactly 10 digits.')
-        has_error = True
-    elif phone[0] not in '6789':
-        messages.error(request, 'Phone number must start with 6, 7, 8 or 9.')
-        has_error = True
-
-    # Email
-    if not email:
-        messages.error(request, 'Email is required.')
-        has_error = True
-    elif not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
-        messages.error(request, 'Enter a valid email address.')
-        has_error = True
-    elif db_email_exists(email, exclude_id=exclude_id):
-        messages.error(request, 'This email is already registered.')
-        has_error = True
-
-    # Course
-    if not course:
-        messages.error(request, 'Course is required.')
-        has_error = True
-    else:
-        try:
-            selected_course_id = int(course)
-        except (TypeError, ValueError):
-            selected_course_id = None
-
-        if selected_course_id is None or not db_course_exists(selected_course_id):
-            messages.error(request, 'Selected course is not available in the course master list.')
-            has_error = True
-
-    return has_error
-
-
-# IMAGE UPLOAD VALIDATION / STORAGE
+# CONSTANTS
 
 ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif'}
 ALLOWED_IMAGE_CONTENT_TYPES = {
@@ -100,34 +45,154 @@ ALLOWED_IMAGE_CONTENT_TYPES = {
 MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2 MB
 
 
-def _validate_student_image(request, image_file):
+# SHARED VALIDATION HELPERS
+
+def _validate_form(request, name, phone, email, course, exclude_id=None, api_mode=False):
+    # """
+    # Validate student form fields.
+    # If api_mode=True, returns (has_error, error_list).
+    # If api_mode=False, adds Django messages and returns has_error.
+    # """
+    errors = []
+    has_error = False
+
+    # Name
+    if not name:
+        error_msg = 'Name is required.'
+        if api_mode:
+            errors.append(error_msg)
+        else:
+            messages.error(request, error_msg)
+        has_error = True
+    elif not re.match(r'^[A-Za-z\s]+$', name):
+        error_msg = 'Name must contain only letters and spaces.'
+        if api_mode:
+            errors.append(error_msg)
+        else:
+            messages.error(request, error_msg)
+        has_error = True
+
+    # Phone
+    if not phone:
+        error_msg = 'Phone number is required.'
+        if api_mode:
+            errors.append(error_msg)
+        else:
+            messages.error(request, error_msg)
+        has_error = True
+    elif not phone.isdigit() or len(phone) != 10:
+        error_msg = 'Phone number must be exactly 10 digits.'
+        if api_mode:
+            errors.append(error_msg)
+        else:
+            messages.error(request, error_msg)
+        has_error = True
+    elif phone[0] not in '6789':
+        error_msg = 'Phone number must start with 6, 7, 8 or 9.'
+        if api_mode:
+            errors.append(error_msg)
+        else:
+            messages.error(request, error_msg)
+        has_error = True
+
+    # Email
+    if not email:
+        error_msg = 'Email is required.'
+        if api_mode:
+            errors.append(error_msg)
+        else:
+            messages.error(request, error_msg)
+        has_error = True
+    elif not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        error_msg = 'Enter a valid email address.'
+        if api_mode:
+            errors.append(error_msg)
+        else:
+            messages.error(request, error_msg)
+        has_error = True
+    elif db_email_exists(email, exclude_id=exclude_id):
+        error_msg = 'This email is already registered.'
+        if api_mode:
+            errors.append(error_msg)
+        else:
+            messages.error(request, error_msg)
+        has_error = True
+
+    # Course
+    if not course:
+        error_msg = 'Course is required.'
+        if api_mode:
+            errors.append(error_msg)
+        else:
+            messages.error(request, error_msg)
+        has_error = True
+    else:
+        try:
+            selected_course_id = int(course)
+        except (TypeError, ValueError):
+            selected_course_id = None
+
+        if selected_course_id is None or not db_course_exists(selected_course_id):
+            error_msg = 'Selected course is not available in the course master list.'
+            if api_mode:
+                errors.append(error_msg)
+            else:
+                messages.error(request, error_msg)
+            has_error = True
+
+    if api_mode:
+        return has_error, errors
+    return has_error
+
+
+def _validate_student_image(request, image_file, api_mode=False):
+    # """
+    # Validate student image file.
+    # If api_mode=True, returns (has_error, error_message).
+    # If api_mode=False, adds Django messages and returns has_error.
+    # """
     if not image_file:
         return False
 
     if image_file.size > MAX_IMAGE_SIZE:
-        messages.error(request, 'Image must be 2MB or smaller.')
+        error_msg = 'Image must be 2MB or smaller.'
+        if api_mode:
+            return True, error_msg
+        messages.error(request, error_msg)
         return True
 
     if image_file.content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
-        messages.error(request, 'Only JPG, PNG, and GIF image files are allowed.')
+        error_msg = 'Only JPG, PNG, and GIF image files are allowed.'
+        if api_mode:
+            return True, error_msg
+        messages.error(request, error_msg)
         return True
 
     header = image_file.read(512)
     image_file.seek(0)
     image_type = imghdr.what(None, header)
     if image_type not in ALLOWED_IMAGE_EXTENSIONS:
-        messages.error(request, 'Uploaded file is not a valid image.')
+        error_msg = 'Uploaded file is not a valid image.'
+        if api_mode:
+            return True, error_msg
+        messages.error(request, error_msg)
         return True
 
     ext = os.path.splitext(image_file.name)[1].lower()
     if ext and ext.lstrip('.') not in ALLOWED_IMAGE_EXTENSIONS:
-        messages.error(request, 'Image file extension must be JPG, PNG, or GIF.')
+        error_msg = 'Image file extension must be JPG, PNG, or GIF.'
+        if api_mode:
+            return True, error_msg
+        messages.error(request, error_msg)
         return True
 
     return False
 
 
 def _save_student_image(image_file):
+    # """
+    # Save uploaded student image and return the relative path.
+    # """
     uploads_dir = Path(settings.MEDIA_ROOT) / 'student_images'
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
@@ -146,7 +211,7 @@ def _save_student_image(image_file):
     return f'student_images/{filename}'
 
 
-# STUDENT LIST  (READ — all students)
+# WEB VIEWS (CRUD OPERATIONS)
 
 def student_list(request):
     # """
@@ -154,33 +219,31 @@ def student_list(request):
     # Supports search (name / phone / email / course) and pagination (5 per page).
     # """
     search_keyword = request.GET.get('search', '').strip()
-    all_students   = db_get_all_students(search_keyword=search_keyword)
+    all_students = db_get_all_students(search_keyword=search_keyword)
 
-    paginator   = Paginator(all_students, 5)
-    page_obj    = paginator.get_page(request.GET.get('page'))
+    paginator = Paginator(all_students, 5)
+    page_obj = paginator.get_page(request.GET.get('page'))
 
     return render(request, 'student/student_list.html', {
-        'students':       page_obj,
-        'page_obj':       page_obj,
-        'paginator':      paginator,
+        'students': page_obj,
+        'page_obj': page_obj,
+        'paginator': paginator,
         'search_keyword': search_keyword,
     })
 
 
-# ADD STUDENT  (CREATE)
-
 def add_student(request):
     # """
-    # GET   blank form.
-    # POST  validate → INSERT student + Pending approval → redirect to list.
+    # GET: blank form.
+    # POST: validate → INSERT student + Pending approval → redirect to list.
     # """
     form_data = {'name': '', 'phone': '', 'email': '', 'course': ''}
     courses = db_get_courses()
 
     if request.method == 'POST':
-        name   = request.POST.get('name',   '').strip()
-        phone  = request.POST.get('phone',  '').strip()
-        email  = request.POST.get('email',  '').strip()
+        name = request.POST.get('name', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        email = request.POST.get('email', '').strip()
         course = request.POST.get('course', '').strip()
         image_file = request.FILES.get('student_image')
 
@@ -199,12 +262,10 @@ def add_student(request):
     })
 
 
-# EDIT STUDENT  (UPDATE)
-
 def edit_student(request, student_id):
     # """
-    # GET   form pre-filled with current student data.
-    # POST  validate → UPDATE student → redirect to list.
+    # GET: form pre-filled with current student data.
+    # POST: validate → UPDATE student → redirect to list.
     # ANY edit automatically resets status to Pending for re-approval.
     # """
     student = db_get_student_by_id(student_id)
@@ -215,16 +276,16 @@ def edit_student(request, student_id):
     page = request.GET.get('page', '').strip() if request.method == 'GET' else request.POST.get('page', '').strip()
     courses = db_get_courses()
     form_data = {
-        'name':   student['name'],
-        'phone':  student['phone'],
-        'email':  student['email'],
+        'name': student['name'],
+        'phone': student['phone'],
+        'email': student['email'],
         'course': '' if student['course_id'] is None else str(student['course_id']),
     }
 
     if request.method == 'POST':
-        name   = request.POST.get('name',   '').strip()
-        phone  = request.POST.get('phone',  '').strip()
-        email  = request.POST.get('email',  '').strip()
+        name = request.POST.get('name', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        email = request.POST.get('email', '').strip()
         course = request.POST.get('course', '').strip()
         image_file = request.FILES.get('student_image')
 
@@ -243,20 +304,43 @@ def edit_student(request, student_id):
             return redirect('student_list')
 
     return render(request, 'student/edit_student.html', {
-        'student':   student,
+        'student': student,
         'form_data': form_data,
-        'courses':   courses,
-        'page':      page,
+        'courses': courses,
+        'page': page,
     })
 
 
-# DELETE STUDENT  (DELETE)
 
+# old code of delete....
+#update code is below ...
+# def delete_student(request, student_id):
+#     # """
+#     # GET: confirmation page.
+#     # POST: DELETE student (and all approval records) → redirect.
+#     # """
+#     student = db_get_student_by_id(student_id)
+#     if not student:
+#         messages.error(request, 'Student not found.')
+#         return redirect('student_list')
+
+#     page = request.GET.get('page', '').strip()
+
+#     if request.method == 'POST':
+#         page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
+#         db_delete_student(student_id)
+#         messages.success(request, f'Student "{student["name"]}" deleted.')
+#         if page:
+#             return redirect(f'{reverse("student_list")}?page={page}')
+#         return redirect('student_list')
+
+#     return render(request, 'student/delete_student.html', {'student': student, 'page': page})
+
+
+
+
+# new code of delete and restore....
 def delete_student(request, student_id):
-    # """
-    # GET   confirmation page.
-    # POST  DELETE student (and all approval records) → redirect.
-    # """
     student = db_get_student_by_id(student_id)
     if not student:
         messages.error(request, 'Student not found.')
@@ -265,22 +349,42 @@ def delete_student(request, student_id):
     page = request.GET.get('page', '').strip()
 
     if request.method == 'POST':
-        page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
-        db_delete_student(student_id)
-        messages.success(request, f'Student "{student["name"]}" deleted.')
+        page = request.POST.get('page', page).strip()
+        # Pass 'Admin' or request.user.username if using auth
+        db_delete_student(student_id, deleted_by='Admin') 
+        messages.success(request, f'Student "{student["name"]}" moved to trash.')
         if page:
             return redirect(f'{reverse("student_list")}?page={page}')
         return redirect('student_list')
 
     return render(request, 'student/delete_student.html', {'student': student, 'page': page})
 
+# ADD THESE TWO NEW VIEWS
+def deleted_students_list(request):
+    """ Shows the trash bin / archive of deleted students """
+    deleted_students = db_get_deleted_students()
+    return render(request, 'student/deleted_list.html', {
+        'deleted_students': deleted_students
+    })
 
-# APPROVE STUDENT
+def restore_student(request, student_id):
+    """ Action to restore a student from the trash """
+    if request.method == 'POST':
+        success = db_restore_student(student_id, restored_by='Admin')
+        if success:
+            messages.success(request, 'Student restored successfully and requires re-approval.')
+        else:
+            messages.error(request, 'Failed to restore student.')
+    return redirect('deleted_students_list')
+
+
+
+
 
 def approve_student(request, student_id):
     # """
-    # GET   confirmation page with optional remarks.
-    # POST  INSERT Approved record → redirect.
+    # GET: confirmation page with optional remarks.
+    # POST: INSERT Approved record → redirect.
     # Only Pending students can be approved.
     # """
     student = db_get_student_by_id(student_id)
@@ -311,12 +415,10 @@ def approve_student(request, student_id):
     })
 
 
-# REJECT STUDENT
-
 def reject_student(request, student_id):
     # """
-    # GET   confirmation page with optional remarks.
-    # POST  INSERT Rejected record → redirect.
+    # GET: confirmation page with optional remarks.
+    # POST: INSERT Rejected record → redirect.
     # Only Pending students can be rejected.
     # """
     student = db_get_student_by_id(student_id)
@@ -347,11 +449,9 @@ def reject_student(request, student_id):
     })
 
 
-# APPROVAL HISTORY  (VIEW AUDIT TRAIL)
-
 def view_approval_history(request, student_id):
     # """
-    # GET   display full approval/rejection history for a student.
+    # GET: display full approval/rejection history for a student.
     # Shows every event (Pending → Approved/Rejected) with timestamps and remarks.
     # """
     student = db_get_student_by_id(student_id)
@@ -369,7 +469,7 @@ def view_approval_history(request, student_id):
     })
 
 
-# REAL-TIME SEARCH (AJAX)
+# AJAX ENDPOINTS
 
 def search_students_api(request):
     # """
@@ -378,14 +478,14 @@ def search_students_api(request):
     # GET parameter: ?q=search_keyword
     # """
     search_keyword = request.GET.get('q', '').strip()
-    
+
     # Require minimum 1 character
     if len(search_keyword) < 1:
         return JsonResponse({'results': []})
-    
+
     # Get matching students
     all_students = db_get_all_students(search_keyword=search_keyword)
-    
+
     # Limit to first 20 results for performance
     results = []
     for student in all_students[:20]:
@@ -398,11 +498,9 @@ def search_students_api(request):
             'approval_status': student['approval_status'],
             'approved_by': student['approved_by'],
         })
-    
+
     return JsonResponse({'results': results})
 
-
-# COURSES API  (fetch all active courses as JSON)
 
 def get_courses_api(request):
     # """
@@ -410,7 +508,7 @@ def get_courses_api(request):
     # Returns JSON array with all courses.
     # """
     courses = db_get_courses()
-    
+
     results = []
     for course in courses:
         results.append({
@@ -419,84 +517,11 @@ def get_courses_api(request):
             'course_code': course['course_code'],
             'status': course['status'],
         })
-    
+
     return JsonResponse({'courses': results})
 
 
-# API VALIDATION HELPERS
-
-def _validate_form_api(name, phone, email, course, exclude_id=None):
-    # """
-    # Validate student form fields for API.
-    # Returns (has_error, error_list).
-    # """
-    errors = []
-
-    # Name
-    if not name:
-        errors.append('Name is required.')
-    elif not re.match(r'^[A-Za-z\s]+$', name):
-        errors.append('Name must contain only letters and spaces.')
-
-    # Phone
-    if not phone:
-        errors.append('Phone number is required.')
-    elif not phone.isdigit() or len(phone) != 10:
-        errors.append('Phone number must be exactly 10 digits.')
-    elif phone[0] not in '6789':
-        errors.append('Phone number must start with 6, 7, 8 or 9.')
-
-    # Email
-    if not email:
-        errors.append('Email is required.')
-    elif not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
-        errors.append('Enter a valid email address.')
-    elif db_email_exists(email, exclude_id=exclude_id):
-        errors.append('This email is already registered.')
-
-    # Course
-    if not course:
-        errors.append('Course is required.')
-    else:
-        try:
-            selected_course_id = int(course)
-        except (TypeError, ValueError):
-            selected_course_id = None
-
-        if selected_course_id is None or not db_course_exists(selected_course_id):
-            errors.append('Selected course is not available in the course master list.')
-
-    return len(errors) > 0, errors
-
-
-def _validate_student_image_api(image_file):
-    # """
-    # Validate image file for API.
-    # Returns (has_error, error_message).
-    # """
-    if not image_file:
-        return False, None
-
-    if image_file.size > MAX_IMAGE_SIZE:
-        return True, 'Image must be 2MB or smaller.'
-
-    if image_file.content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
-        return True, 'Only JPG, PNG, and GIF image files are allowed.'
-
-    header = image_file.read(512)
-    image_file.seek(0)
-    image_type = imghdr.what(None, header)
-    if image_type not in ALLOWED_IMAGE_EXTENSIONS:
-        return True, 'Uploaded file is not a valid image.'
-
-    ext = os.path.splitext(image_file.name)[1].lower()
-    if ext and ext.lstrip('.') not in ALLOWED_IMAGE_EXTENSIONS:
-        return True, 'Image file extension must be JPG, PNG, or GIF.'
-
-    return False, None
-
-
-# STUDENT APIs
+# API ENDPOINTS
 
 def api_add_student(request):
     # """
@@ -514,12 +539,12 @@ def api_add_student(request):
     image_file = request.FILES.get('student_image')
 
     # Validate form
-    has_error, errors = _validate_form_api(name, phone, email, course)
+    has_error, errors = _validate_form(request, name, phone, email, course, api_mode=True)
     if has_error:
         return JsonResponse({'error': 'Validation failed', 'details': errors}, status=400)
 
     # Validate image
-    image_error, image_msg = _validate_student_image_api(image_file)
+    image_error, image_msg = _validate_student_image(request, image_file, api_mode=True)
     if image_error:
         return JsonResponse({'error': image_msg}, status=400)
 
@@ -570,12 +595,12 @@ def api_update_student(request, student_id):
     image_file = request.FILES.get('student_image')
 
     # Validate form
-    has_error, errors = _validate_form_api(name, phone, email, course, exclude_id=student_id)
+    has_error, errors = _validate_form(request, name, phone, email, course, exclude_id=student_id, api_mode=True)
     if has_error:
         return JsonResponse({'error': 'Validation failed', 'details': errors}, status=400)
 
     # Validate image
-    image_error, image_msg = _validate_student_image_api(image_file)
+    image_error, image_msg = _validate_student_image(request, image_file, api_mode=True)
     if image_error:
         return JsonResponse({'error': image_msg}, status=400)
 

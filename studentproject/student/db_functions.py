@@ -103,19 +103,60 @@ def db_update_student(student_id, name, phone, email, course_id, student_image_p
             return cur.fetchone()[0]
 
 
-# DELETE
+# DELETE old code..
 
-def db_delete_student(student_id):
+
+# def db_delete_student(student_id):
+#     # """
+#     # DELETE a student and ALL related approval records.
+#     # Returns True if the student row was deleted.
+#     # """
+#     with connection.cursor() as cur:
+#         cur.execute(
+#             "SELECT fnDeleteStudent(%s)",
+#             [student_id]
+#         )
+#         return cur.fetchone()[0]
+
+
+
+# delete new code...
+def db_delete_student(student_id, deleted_by='Admin'):
     # """
-    # DELETE a student and ALL related approval records.
-    # Returns True if the student row was deleted.
+    # SOFT DELETE a student. Keeps history intact.
+    # Returns True if the student row was updated.
     # """
     with connection.cursor() as cur:
         cur.execute(
-            "SELECT fnDeleteStudent(%s)",
-            [student_id]
+            "SELECT fnDeleteStudent(%s, %s)",
+            [student_id, deleted_by]
         )
         return cur.fetchone()[0]
+
+# ADD THESE TWO NEW FUNCTIONS AT THE BOTTOM
+def db_restore_student(student_id, restored_by='Admin'):
+    # """
+    # Restores a softly deleted student back to the active list.
+    # """
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT fnRestoreStudent(%s, %s)",
+            [student_id, restored_by]
+        )
+        return cur.fetchone()[0]
+
+def db_get_deleted_students():
+    # """
+    # Fetch all students currently marked as deleted.
+    # """
+    with connection.cursor() as cur:
+        cur.execute("SELECT * FROM fnGetDeletedStudents()")
+        return _fetchall(cur)
+
+
+
+
+
 
 
 # APPROVE

@@ -1,0 +1,176 @@
+{% extends 'student/base.html' %}
+
+{% block content %}
+<!-- Proper custom header to avoid base.html visual conflicts -->
+<div class="archive-header">
+    <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 26px;">🗑️</span>
+        <h2 style="color: #dc3545; margin: 0;">Deleted Students Archive</h2>
+    </div>
+    <a href="{% url 'student_list' %}" class="btn btn-info">
+        <span>← Back to Active List</span>
+    </a>
+</div>
+
+<div class="alert alert-warning" style="margin-bottom: 20px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+    <strong>Note:</strong> Records shown here are soft-deleted and can be restored back to the active list.
+</div>
+
+<table id="deletedStudentsTable">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Deleted By</th>
+            <th>Deleted Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for student in deleted_students %}
+        <tr>
+            <td>{{ student.id }}</td>
+            <td style="font-weight: 600; color: #1f2937;">{{ student.name }}</td>
+            <td>{{ student.email }}</td>
+            <td>{{ student.deleted_by|default:"—" }}</td>
+            <td>{{ student.deleted_date|date:"M d, Y H:i" }}</td>
+            <td>
+                <!-- 
+                  Instead of a form with an inline alert, we trigger a custom JavaScript function 
+                  and pass the student's ID and Name to the custom modal popup.
+                -->
+                <button type="button" class="btn btn-success" onclick="openRestoreModal('{{ student.id }}', '{{ student.name|escapejs }}')">
+                    ↻ Restore
+                </button>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="6" class="empty-state">
+                <div style="padding: 40px 20px;">
+                    <span style="font-size: 48px; display: block; margin-bottom: 12px; color: #cbd5e1;">📂</span>
+                    <h3 style="color: #64748b; margin-bottom: 8px;">No Deleted Students</h3>
+                    <p style="color: #94a3b8; font-size: 14px;">The trash is currently empty.</p>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- ============================================== -->
+<!-- CUSTOM RESTORE CONFIRMATION MODAL (POPUP) -->
+<!-- ============================================== -->
+<div id="restoreModal" class="custom-modal-overlay">
+    <!-- Using your existing form-card class for consistent styling -->
+    <div class="modal-content form-card">
+        <div style="font-size: 42px; margin-bottom: 12px; text-align: center;">♻️</div>
+        
+        <h2 style="color: #28a745; text-align: center; margin-bottom: 12px;">Confirm Restore</h2>
+        
+        <p style="color: #4b5563; font-size: 16px; text-align: center; margin-bottom: 16px;">
+            Are you sure you want to restore <strong id="restoreStudentName" style="color: #111827;"></strong>?
+        </p>
+        
+        <div style="background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 13px; color: #64748b; text-align: center; border: 1px solid #e2e8f0; margin-bottom: 24px;">
+            This student will be moved out of the trash and back to the active list.
+        </div>
+
+        <form id="restoreForm" method="POST" action="">
+            {% csrf_token %}
+            <div style="display: flex; justify-content: center; gap: 12px;">
+                <button type="button" class="btn btn-info" onclick="closeRestoreModal()" style="min-width: 120px; padding: 10px;">Cancel</button>
+                <button type="submit" class="btn btn-success" style="min-width: 120px; padding: 10px;">Yes, Restore</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+/* Layout fixes for the header */
+.archive-header {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #f1f5f9;
+}
+
+@media (max-width: 600px) {
+    .archive-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+}
+
+/* Custom Modal Styles */
+.custom-modal-overlay {
+    display: none; /* Hidden by default */
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(15, 23, 42, 0.6); /* Dark semi-transparent background */
+    backdrop-filter: blur(4px); /* Blurs the background content slightly */
+    align-items: center;
+    justify-content: center;
+}
+
+/* Class to trigger showing the modal using flexbox */
+.custom-modal-overlay.show {
+    display: flex; 
+}
+
+.modal-content {
+    animation: modalPopIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    max-width: 450px !important; /* Force smaller width for popup */
+    width: 90%;
+    position: relative;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+
+@keyframes modalPopIn {
+    0% { opacity: 0; transform: scale(0.9) translateY(20px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+</style>
+
+<script>
+    // Function to Open the Modal dynamically
+    function openRestoreModal(studentId, studentName) {
+        const modal = document.getElementById('restoreModal');
+        const nameElement = document.getElementById('restoreStudentName');
+        const formElement = document.getElementById('restoreForm');
+
+        // 1. Set the dynamic name in the popup
+        nameElement.textContent = studentName;
+
+        // 2. Build the correct Django URL for the form action
+        // We use a dummy ID '0' and replace it with the actual studentId
+        let baseActionUrl = "{% url 'restore_student' 0 %}";
+        formElement.action = baseActionUrl.replace('/0/', '/' + studentId + '/');
+
+        // 3. Show the modal
+        modal.classList.add('show');
+    }
+
+    // Function to Close the Modal
+    function closeRestoreModal() {
+        const modal = document.getElementById('restoreModal');
+        modal.classList.remove('show');
+    }
+
+    // Optional: Close the modal if the user clicks anywhere outside of the white card
+    window.onclick = function(event) {
+        const modal = document.getElementById('restoreModal');
+        if (event.target === modal) {
+            closeRestoreModal();
+        }
+    }
+</script>
+{% endblock %}

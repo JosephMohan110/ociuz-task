@@ -18,4 +18,6 @@ urlpatterns = [
     path('api/students/update/<int:student_id>/',views.api_update_student,name='api_update_student'),
     path('api/students/<int:student_id>/approve/',views.api_approve_student,name='api_approve_student'),
     path('api/students/<int:student_id>/reject/',views.api_reject_student,name='api_reject_student'),
+    path('deleted/', views.deleted_students_list, name='deleted_students_list'),
+    path('restore/<int:student_id>/', views.restore_student, name='restore_student'),
 ]

@@ -20,9 +20,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-ukpm)4^()(l&vp0#)g4@)8)65qzv+z%37$v$m1_i!x9-%+dw2^'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -44,6 +45,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'student.middleware.GlobalExceptionMiddleware',
 ]
 
 ROOT_URLCONF = 'studentproject.urls'

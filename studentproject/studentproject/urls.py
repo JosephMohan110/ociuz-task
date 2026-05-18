@@ -20,12 +20,19 @@ from django.contrib import admin
 from django.urls import path, include
 from student import views as student_views
 
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', student_views.student_list, name='home'),
     path('student/', include('student.urls')),
-    # path('chat_bot/', include('chat_bot.urls')),
 ]
 
+# Custom error pages
+handler404 = 'student.views.custom_404'
+handler500 = 'student.views.custom_500'
+handler403 = 'student.views.custom_403'
+handler400 = 'student.views.custom_400'
+
+# Media files (uploaded images)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

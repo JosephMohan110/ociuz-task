@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Error</title>
+    <style>
+        body{
+            font-family: Arial, sans-serif;
+            background:#f4f6f9;
+            text-align:center;
+            padding-top:100px;
+        }
+        .box{
+            width:500px;
+            margin:auto;
+            background:white;
+            padding:40px;
+            border-radius:10px;
+            box-shadow:0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1{
+            color:#dc3545;
+            font-size:60px;
+            margin:0;
+        }
+        h3{
+            margin-top:10px;
+            color:#333;
+        }
+        p{
+            color:#666;
+        }
+        a{
+            display:inline-block;
+            margin-top:20px;
+            padding:10px 20px;
+            background:#007bff;
+            color:white;
+            text-decoration:none;
+            border-radius:5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>{{ code }}</h1>
+        <h3>{{ message }}</h3>
+        <p>Something went wrong. Please contact administrator.</p>
+        <a href="/">Go Home</a>
+    </div>
+</body>
+</html>

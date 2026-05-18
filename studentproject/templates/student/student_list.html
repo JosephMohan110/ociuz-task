@@ -36,9 +36,9 @@
             <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
             <td>
                 {% if student.student_image %}
-                <img src="{{ MEDIA_URL }}{{ student.student_image }}" alt="{{ student.name }}" class="student-thumb">
+                    <img src="/media/{{ student.student_image }}" >
                 {% else %}
-                —
+                .
                 {% endif %}
             </td>
             <td>{{ student.name }}</td>

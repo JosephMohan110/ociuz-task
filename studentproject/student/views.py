@@ -16,6 +16,10 @@ from django.urls import reverse
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.http import JsonResponse
+from functools import wraps
+from django.shortcuts import render
+
+
 
 from .db_functions import (
     db_get_all_students,
@@ -27,6 +31,7 @@ from .db_functions import (
     db_restore_student,
     db_get_deleted_students,
     # db_approve_student,
+    # db_approve_student,
     # db_reject_student,
     db_process_student_approval,
     db_get_approval_history,
@@ -35,6 +40,25 @@ from .db_functions import (
     db_get_dashboard_stats,
     db_get_global_approval_history,
 )
+
+
+
+
+
+def global_error_handler(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        try:
+            return view_func(request, *args, **kwargs)
+        except Exception as e:
+            return render(request, 'student/error.html', {
+                'code': 500,
+                'message': str(e)
+            }, status=500)
+    return wrapper
+
+
+
 
 
 # CONSTANTS
@@ -216,11 +240,13 @@ def _save_student_image(image_file):
 
 # WEB VIEWS (CRUD OPERATIONS)
 
+@global_error_handler
 def student_list(request):
     # """
     # Display all students with their current approval status.
     # Supports search (name / phone / email / course) and pagination (5 per page).
     # """
+    # x=10/0
     search_keyword = request.GET.get('search', '').strip()
     all_students = db_get_all_students(search_keyword=search_keyword)
 
@@ -235,6 +261,7 @@ def student_list(request):
     })
 
 
+@global_error_handler
 def add_student(request):
     # """
     # GET: blank form.
@@ -265,6 +292,8 @@ def add_student(request):
     })
 
 
+
+@global_error_handler
 def edit_student(request, student_id):
     # """
     # GET: form pre-filled with current student data.
@@ -315,34 +344,13 @@ def edit_student(request, student_id):
 
 
 
-# old code of delete....
-#update code is below ...
-# def delete_student(request, student_id):
-#     # """
-#     # GET: confirmation page.
-#     # POST: DELETE student (and all approval records) → redirect.
-#     # """
-#     student = db_get_student_by_id(student_id)
-#     if not student:
-#         messages.error(request, 'Student not found.')
-#         return redirect('student_list')
 
-#     page = request.GET.get('page', '').strip()
-
-#     if request.method == 'POST':
-#         page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
-#         db_delete_student(student_id)
-#         messages.success(request, f'Student "{student["name"]}" deleted.')
-#         if page:
-#             return redirect(f'{reverse("student_list")}?page={page}')
-#         return redirect('student_list')
-
-#     return render(request, 'student/delete_student.html', {'student': student, 'page': page})
 
 
 
 
 # new code of delete and restore....
+@global_error_handler
 def delete_student(request, student_id):
     student = db_get_student_by_id(student_id)
     if not student:
@@ -363,6 +371,7 @@ def delete_student(request, student_id):
     return render(request, 'student/delete_student.html', {'student': student, 'page': page})
 
 # ADD THESE TWO NEW VIEWS
+@global_error_handler
 def deleted_students_list(request):
     """ Shows the trash bin / archive of deleted students """
     deleted_students = db_get_deleted_students()
@@ -370,6 +379,7 @@ def deleted_students_list(request):
         'deleted_students': deleted_students
     })
 
+@global_error_handler
 def restore_student(request, student_id):
     """ Action to restore a student from the trash """
     if request.method == 'POST':
@@ -383,77 +393,9 @@ def restore_student(request, student_id):
 
 
 
-# THIS CODE IS NW REPLACE BY ITS BELOW CODE...
-# def approve_student(request, student_id):
-#     # """
-#     # GET: confirmation page with optional remarks.
-#     # POST: INSERT Approved record → redirect.
-#     # Only Pending students can be approved.
-#     # """
-#     student = db_get_student_by_id(student_id)
-#     if not student:
-#         messages.error(request, 'Student not found.')
-#         return redirect('student_list')
-
-#     if student['approval_status'] != 'Pending':
-#         messages.warning(request,
-#             f'"{student["name"]}" is already {student["approval_status"]}.')
-#         return redirect('student_list')
-
-#     page = request.GET.get('page', '').strip()
-
-#     if request.method == 'POST':
-#         remarks = request.POST.get('remarks', '').strip()
-#         page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
-#         db_approve_student(student_id, approved_by='Admin', remarks=remarks)
-#         messages.success(request, f'"{student["name"]}" approved successfully.')
-#         if page:
-#             return redirect(f'{reverse("student_list")}?page={page}')
-#         return redirect('student_list')
-
-#     return render(request, 'student/approve_student.html', {
-#         'student': student,
-#         'remarks': '',
-#         'page': page,
-#     })
 
 
-# def reject_student(request, student_id):
-#     # """
-#     # GET: confirmation page with optional remarks.
-#     # POST: INSERT Rejected record → redirect.
-#     # Only Pending students can be rejected.
-#     # """
-#     student = db_get_student_by_id(student_id)
-#     if not student:
-#         messages.error(request, 'Student not found.')
-#         return redirect('student_list')
-
-#     if student['approval_status'] != 'Pending':
-#         messages.warning(request,
-#             f'"{student["name"]}" is already {student["approval_status"]}.')
-#         return redirect('student_list')
-
-#     page = request.GET.get('page', '').strip()
-
-#     if request.method == 'POST':
-#         remarks = request.POST.get('remarks', '').strip()
-#         page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
-#         db_reject_student(student_id, approved_by='Admin', remarks=remarks)
-#         messages.success(request, f'"{student["name"]}" rejected.')
-#         if page:
-#             return redirect(f'{reverse("student_list")}?page={page}')
-#         return redirect('student_list')
-
-#     return render(request, 'student/reject_student.html', {
-#         'student': student,
-#         'remarks': '',
-#         'page': page,
-#     })
-
-
-# NEW CODE FOR APPROVAL AND REJECT..
-
+@global_error_handler
 def approve_student(request, student_id):
     student = db_get_student_by_id(student_id)
     if not student:
@@ -486,6 +428,7 @@ def approve_student(request, student_id):
     })
 
 
+@global_error_handler
 def reject_student(request, student_id):
     student = db_get_student_by_id(student_id)
     if not student:
@@ -521,6 +464,7 @@ def reject_student(request, student_id):
 
 
 
+@global_error_handler
 def view_approval_history(request, student_id):
     # """
     # GET: display full approval/rejection history for a student.
@@ -850,5 +794,37 @@ def global_approval_history(request):
         'date_to': date_to,
     })
 
+
+
+
+
+
+
+def custom_404(request, exception):
+    return render(request, 'student/error.html', {
+        'code': 404,
+        'message': 'Page Not Found'
+    }, status=404)
+
+
+def custom_500(request):
+    return render(request, 'student/error.html', {
+        'code': 500,
+        'message': 'Internal Server Error'
+    }, status=500)
+
+
+def custom_403(request, exception):
+    return render(request, 'student/error.html', {
+        'code': 403,
+        'message': 'Permission Denied'
+    }, status=403)
+
+
+def custom_400(request, exception):
+    return render(request, 'student/error.html', {
+        'code': 400,
+        'message': 'Bad Request'
+    }, status=400)
 
 

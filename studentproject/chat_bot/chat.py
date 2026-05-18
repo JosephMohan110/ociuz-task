@@ -11,7 +11,7 @@ def preprocess_text(text):
     return text
 
 # Load and process data
-file_path = r"C:\Users\LENOVO\Desktop\student\studentproject\chat_bot\data.csv"
+file_path = r"C:\Users\LENOVO\Desktop\psql\studentproject\chat_bot\data.csv"
 df = pd.read_csv(file_path)
 df['Question'] = df['Question'].apply(preprocess_text)
 

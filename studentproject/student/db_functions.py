@@ -133,7 +133,7 @@ def db_delete_student(student_id, deleted_by='Admin'):
         )
         return cur.fetchone()[0]
 
-# ADD THESE TWO NEW FUNCTIONS AT THE BOTTOM
+
 def db_restore_student(student_id, restored_by='Admin'):
     # """
     # Restores a softly deleted student back to the active list.
@@ -158,37 +158,62 @@ def db_get_deleted_students():
 
 
 
+# this is replace by the new procedure
+# # APPROVE
 
-# APPROVE
+# def db_approve_student(student_id, approved_by='Admin', remarks=''):
+#     # """
+#     # Insert an 'Approved' record into student_approval.
+#     # Returns True on success.
+#     # """
+#     with transaction.atomic():
+#         with connection.cursor() as cur:
+#             cur.execute(
+#                 "SELECT fnApproveStudent(%s, %s, %s)",
+#                 [student_id, approved_by, remarks]
+#             )
+#             return cur.fetchone()[0]
 
-def db_approve_student(student_id, approved_by='Admin', remarks=''):
+
+# # REJECT
+
+# def db_reject_student(student_id, approved_by='Admin', remarks=''):
+#     # """
+#     # Insert a 'Rejected' record into student_approval.
+#     # Returns True on success.
+#     # """
+#     with transaction.atomic():
+#         with connection.cursor() as cur:
+#             cur.execute(
+#                 "SELECT fnRejectStudent(%s, %s, %s)",
+#                 [student_id, approved_by, remarks]
+#             )
+#             return cur.fetchone()[0]
+
+
+
+# new code for eject and approve with new procedure
+
+def db_process_student_approval(student_id, action, performed_by='Admin', remarks=''):
     # """
-    # Insert an 'Approved' record into student_approval.
-    # Returns True on success.
+    # Calls the spProcessStudentApproval stored procedure.
+    # :param action: Must be 'APPROVE' or 'REJECT'
+    # :returns: Dictionary with 'status_code' and 'message'
     # """
-    with transaction.atomic():
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT fnApproveStudent(%s, %s, %s)",
-                [student_id, approved_by, remarks]
-            )
-            return cur.fetchone()[0]
+    with connection.cursor() as cur:
+        # We query it just like a table because of the OUT parameters
+        cur.execute(
+            "SELECT o_status_code, o_message FROM spProcessStudentApproval(%s, %s, %s, %s)",
+            [student_id, action, performed_by, remarks]
+        )
+        row = cur.fetchone()
+        
+        return {
+            'status_code': row[0],
+            'message': row[1]
+        }
 
 
-# REJECT
-
-def db_reject_student(student_id, approved_by='Admin', remarks=''):
-    # """
-    # Insert a 'Rejected' record into student_approval.
-    # Returns True on success.
-    # """
-    with transaction.atomic():
-        with connection.cursor() as cur:
-            cur.execute(
-                "SELECT fnRejectStudent(%s, %s, %s)",
-                [student_id, approved_by, remarks]
-            )
-            return cur.fetchone()[0]
 
 
 # APPROVAL HISTORY  (full audit trail)
@@ -230,3 +255,36 @@ def db_course_exists(course_id):
             [course_id]
         )
         return cur.fetchone()[0] > 0
+
+
+
+
+# ==========================================
+# DASHBOARD / REPORTING
+# ==========================================
+def db_get_dashboard_stats():
+    # """
+    # Fetches the pre-calculated dashboard statistics from vwStudentDashboard.
+    # Returns a list of dicts. The last dict in the list is always 'Grand Total'.
+    # """
+    with connection.cursor() as cur:
+        cur.execute("SELECT * FROM vwStudentDashboard")
+        return _fetchall(cur)
+    
+
+
+
+
+# ==========================================
+# AUDIT & HISTORY LOGS
+# ==========================================
+def db_get_global_approval_history(search='', action='', date_from='', date_to=''):
+    # """
+    # Fetch global approval history with optional filters.
+    # """
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM fnGetGlobalApprovalHistory(%s, %s, %s, %s)",
+            [search or None, action or None, date_from or None, date_to or None]
+        )
+        return _fetchall(cur)

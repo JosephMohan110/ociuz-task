@@ -26,11 +26,14 @@ from .db_functions import (
     db_delete_student,
     db_restore_student,
     db_get_deleted_students,
-    db_approve_student,
-    db_reject_student,
+    # db_approve_student,
+    # db_reject_student,
+    db_process_student_approval,
     db_get_approval_history,
     db_get_courses,
     db_course_exists,
+    db_get_dashboard_stats,
+    db_get_global_approval_history,
 )
 
 
@@ -380,73 +383,142 @@ def restore_student(request, student_id):
 
 
 
+# THIS CODE IS NW REPLACE BY ITS BELOW CODE...
+# def approve_student(request, student_id):
+#     # """
+#     # GET: confirmation page with optional remarks.
+#     # POST: INSERT Approved record → redirect.
+#     # Only Pending students can be approved.
+#     # """
+#     student = db_get_student_by_id(student_id)
+#     if not student:
+#         messages.error(request, 'Student not found.')
+#         return redirect('student_list')
+
+#     if student['approval_status'] != 'Pending':
+#         messages.warning(request,
+#             f'"{student["name"]}" is already {student["approval_status"]}.')
+#         return redirect('student_list')
+
+#     page = request.GET.get('page', '').strip()
+
+#     if request.method == 'POST':
+#         remarks = request.POST.get('remarks', '').strip()
+#         page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
+#         db_approve_student(student_id, approved_by='Admin', remarks=remarks)
+#         messages.success(request, f'"{student["name"]}" approved successfully.')
+#         if page:
+#             return redirect(f'{reverse("student_list")}?page={page}')
+#         return redirect('student_list')
+
+#     return render(request, 'student/approve_student.html', {
+#         'student': student,
+#         'remarks': '',
+#         'page': page,
+#     })
+
+
+# def reject_student(request, student_id):
+#     # """
+#     # GET: confirmation page with optional remarks.
+#     # POST: INSERT Rejected record → redirect.
+#     # Only Pending students can be rejected.
+#     # """
+#     student = db_get_student_by_id(student_id)
+#     if not student:
+#         messages.error(request, 'Student not found.')
+#         return redirect('student_list')
+
+#     if student['approval_status'] != 'Pending':
+#         messages.warning(request,
+#             f'"{student["name"]}" is already {student["approval_status"]}.')
+#         return redirect('student_list')
+
+#     page = request.GET.get('page', '').strip()
+
+#     if request.method == 'POST':
+#         remarks = request.POST.get('remarks', '').strip()
+#         page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
+#         db_reject_student(student_id, approved_by='Admin', remarks=remarks)
+#         messages.success(request, f'"{student["name"]}" rejected.')
+#         if page:
+#             return redirect(f'{reverse("student_list")}?page={page}')
+#         return redirect('student_list')
+
+#     return render(request, 'student/reject_student.html', {
+#         'student': student,
+#         'remarks': '',
+#         'page': page,
+#     })
+
+
+# NEW CODE FOR APPROVAL AND REJECT..
 
 def approve_student(request, student_id):
-    # """
-    # GET: confirmation page with optional remarks.
-    # POST: INSERT Approved record → redirect.
-    # Only Pending students can be approved.
-    # """
     student = db_get_student_by_id(student_id)
     if not student:
         messages.error(request, 'Student not found.')
-        return redirect('student_list')
-
-    if student['approval_status'] != 'Pending':
-        messages.warning(request,
-            f'"{student["name"]}" is already {student["approval_status"]}.')
         return redirect('student_list')
 
     page = request.GET.get('page', '').strip()
 
     if request.method == 'POST':
         remarks = request.POST.get('remarks', '').strip()
-        page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
-        db_approve_student(student_id, approved_by='Admin', remarks=remarks)
-        messages.success(request, f'"{student["name"]}" approved successfully.')
+        page = request.POST.get('page', page).strip()
+        
+        # 1. Call the new DB Procedure
+        result = db_process_student_approval(student_id, 'APPROVE', 'Admin', remarks)
+        
+        # 2. Handle the response dynamically based on Status Code
+        if result['status_code'] == 200:
+            messages.success(request, result['message'])
+        elif result['status_code'] == 409:
+            messages.info(request, result['message']) # Already approved
+        else:
+            messages.warning(request, result['message']) # 400 or 500 errors
+
         if page:
             return redirect(f'{reverse("student_list")}?page={page}')
         return redirect('student_list')
 
     return render(request, 'student/approve_student.html', {
-        'student': student,
-        'remarks': '',
-        'page': page,
+        'student': student, 'remarks': '', 'page': page,
     })
 
 
 def reject_student(request, student_id):
-    # """
-    # GET: confirmation page with optional remarks.
-    # POST: INSERT Rejected record → redirect.
-    # Only Pending students can be rejected.
-    # """
     student = db_get_student_by_id(student_id)
     if not student:
         messages.error(request, 'Student not found.')
-        return redirect('student_list')
-
-    if student['approval_status'] != 'Pending':
-        messages.warning(request,
-            f'"{student["name"]}" is already {student["approval_status"]}.')
         return redirect('student_list')
 
     page = request.GET.get('page', '').strip()
 
     if request.method == 'POST':
         remarks = request.POST.get('remarks', '').strip()
-        page = request.POST.get('page', page).strip()  # Use POST page if available, fallback to GET
-        db_reject_student(student_id, approved_by='Admin', remarks=remarks)
-        messages.success(request, f'"{student["name"]}" rejected.')
+        page = request.POST.get('page', page).strip()
+        
+        # 1. Call the new DB Procedure
+        result = db_process_student_approval(student_id, 'REJECT', 'Admin', remarks)
+        
+        # 2. Handle the response dynamically based on Status Code
+        if result['status_code'] == 200:
+            messages.success(request, result['message'])
+        elif result['status_code'] == 409:
+            messages.info(request, result['message']) # Already rejected
+        else:
+            messages.warning(request, result['message']) # 400 or 500 errors
+
         if page:
             return redirect(f'{reverse("student_list")}?page={page}')
         return redirect('student_list')
 
     return render(request, 'student/reject_student.html', {
-        'student': student,
-        'remarks': '',
-        'page': page,
+        'student': student, 'remarks': '', 'page': page,
     })
+
+
+
 
 
 def view_approval_history(request, student_id):
@@ -734,3 +806,49 @@ def api_get_students(request):
         })
 
     return JsonResponse({'students': results})
+
+
+
+
+
+
+def dashboard_view(request):
+    # """
+    # Renders the analytics dashboard.
+    # """
+    stats = db_get_dashboard_stats()
+    
+    # Separate the data so the template is easy to build
+    grand_total_row = stats[-1] if stats else None  # The last row is our Grand Total
+    course_wise_rows = stats[:-1] if stats else []  # Everything else is course-wise
+    
+    return render(request, 'student/dashboard.html', {
+        'grand_total': grand_total_row,
+        'course_stats': course_wise_rows
+    })
+
+
+
+
+
+
+def global_approval_history(request):
+    # Capture filters from the URL (e.g., ?q=John&action=APPROVE)
+    search = request.GET.get('q', '').strip()
+    action = request.GET.get('action', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+
+    # Fetch the filtered data from the database
+    history_logs = db_get_global_approval_history(search, action, date_from, date_to)
+
+    return render(request, 'student/global_approval_history.html', {
+        'history_logs': history_logs,
+        'search': search,
+        'action': action,
+        'date_from': date_from,
+        'date_to': date_to,
+    })
+
+
+

@@ -1,3 +1,29 @@
-Question,Answer
-hai,hello
-payment,transaction
+question,answer
+Hello,Hi there! How can I help you today?
+Hi,Hello! Welcome to our student portal!
+How are you?,I'm doing great! How can I help you?
+What is your name?,I'm StudentBot! Your virtual assistant.
+What courses are available?,We offer Computer Science Business and Engineering courses.
+Tell me about courses,We have many courses. Which subject interests you?
+What is Python?,Python is a programming language for beginners and experts.
+What is Django?,Django is a web framework for Python.
+How to apply?,You can apply online through our admission portal.
+Admission requirements,You need high school diploma and entrance exam scores.
+Application deadline,The deadline for fall admission is June 30th.
+Do you offer scholarships?,Yes! We have merit-based and need-based scholarships.
+Contact support,Email support@studentportal.com or call 1-555-0123.
+Technical issue,Please describe your problem. I'll try to help!
+Forgot password,Click 'Forgot Password' on login page to reset.
+Update profile,Go to student dashboard > My Account settings.
+Check application status,Login to student portal and check your dashboard.
+Thanks,You're welcome! Anything else I can help with?
+Thank you,My pleasure! Feel free to ask more questions.
+Goodbye,Goodbye! Have a great day!
+Bye,See you later! Come back if you need help.
+Help,Ask me about courses admissions support or anything!
+What can you do?,I answer questions about courses admissions and support.
+Where is the campus?,Our main campus is at 123 University Ave.
+Library hours,Library open Mon-Fri 8 AM to 10 PM. Sat 10 AM to 6 PM. Sun 12 PM to 8 PM.
+Exam schedule,Exam schedules are posted on the academic calendar.
+Student ID,Your student ID is provided after admission approval.
+Transcript,Contact registrar's office or request through student portal.

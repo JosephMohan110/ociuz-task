@@ -1,9 +1,10 @@
 
--- SELECT * from students;
--- SELECT * from tblCourse;
--- SELECT * from studentapproval;
--- SELECT * from tblStudentCourse;
--- SELECT * from tblAuditLog;
+
+SELECT * from students;
+SELECT * from tblCourse;
+SELECT * from studentapproval;
+SELECT * from tblStudentCourse;
+SELECT * from tblAuditLog;
 
 CREATE TABLE IF NOT EXISTS students (
     id SERIAL PRIMARY KEY,
@@ -971,11 +972,12 @@ BEGIN
     RETURN QUERY
     SELECT
         al.id,
-        
+        --tblAuditLog alias tblAuditLog.id
         -- Using CAST() instead of :: to ensure the parser understands
+        -- cast is used for convert te datatype .. data want as varcar
         CAST(COALESCE(s.name, 'Unknown/Deleted') AS VARCHAR) AS student_name,
         CAST(al.action_type AS VARCHAR) AS action,
-        
+        --coalese if first value empty, use second value.
         -- Extract the status from the JSONB snapshots safely
         CAST(COALESCE(al.old_value->>'approval_status', 'None') AS VARCHAR) AS old_status,
         CAST(COALESCE(al.new_value->>'approval_status', 'None') AS VARCHAR) AS new_status,
@@ -1008,25 +1010,88 @@ $$ LANGUAGE plpgsql;
 
 
 
--- DROP FUNCTION IF EXISTS fnGetApprovalHistory(INT);
--- CREATE OR REPLACE FUNCTION fnGetApprovalHistory(p_student_id INT)
--- RETURNS TABLE(
---     id INT,
---     approval_status VARCHAR,
---     approved_by VARCHAR,
---     remarks TEXT,
---     approved_date TIMESTAMP
--- ) AS $$
+DROP FUNCTION IF EXISTS fnGetApprovalHistory(INT);
+CREATE OR REPLACE FUNCTION fnGetApprovalHistory(p_student_id INT)
+RETURNS TABLE(
+    id INT,
+    approval_status VARCHAR,
+    approved_by VARCHAR,
+    remarks TEXT,
+    approved_date TIMESTAMP
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        sa.id,
+        sa.approval_status,
+        sa.approved_by,
+        sa.remarks,
+        sa.approved_date
+    FROM studentapproval sa
+    WHERE sa.student_id = p_student_id
+    ORDER BY sa.id DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+-- ==========================================
+-- SIMPLE CHATBOT TABLES FOR POSTGRESQL
+-- ==========================================
+
+-- -- Drop existing tables if they exist
+-- DROP TABLE IF EXISTS tblChatbotQA CASCADE;
+-- DROP TABLE IF EXISTS tblChatHistory CASCADE;
+-- DROP TABLE IF EXISTS tblChatFeedback CASCADE;
+
+-- -- Simple table for storing Q&A pairs (only question and answer)
+-- CREATE TABLE IF NOT EXISTS tblChatbotQA (
+--     id SERIAL PRIMARY KEY,
+--     question TEXT NOT NULL UNIQUE,
+--     answer TEXT NOT NULL,
+--     usage_count INTEGER DEFAULT 0,
+--     is_active BOOLEAN DEFAULT TRUE,
+--     created_date TIMESTAMP DEFAULT NOW(),
+--     updated_date TIMESTAMP DEFAULT NOW()
+-- );
+
+-- -- Table for storing chat history
+-- CREATE TABLE IF NOT EXISTS tblChatHistory (
+--     id SERIAL PRIMARY KEY,
+--     session_id VARCHAR(100) NOT NULL,
+--     user_message TEXT NOT NULL,
+--     bot_response TEXT NOT NULL,
+--     created_date TIMESTAMP DEFAULT NOW()
+-- );
+
+-- -- Simple feedback table
+-- CREATE TABLE IF NOT EXISTS tblChatFeedback (
+--     id SERIAL PRIMARY KEY,
+--     chat_history_id INTEGER REFERENCES tblChatHistory(id) ON DELETE CASCADE,
+--     is_helpful BOOLEAN,
+--     created_date TIMESTAMP DEFAULT NOW()
+-- );
+
+-- -- Create indexes
+-- CREATE INDEX IF NOT EXISTS idx_question ON tblChatbotQA(question);
+-- CREATE INDEX IF NOT EXISTS idx_session ON tblChatHistory(session_id);
+
+-- -- Function to update updated_date
+-- CREATE OR REPLACE FUNCTION update_updated_date_column()
+-- RETURNS TRIGGER AS $$
 -- BEGIN
---     RETURN QUERY
---     SELECT 
---         sa.id,
---         sa.approval_status,
---         sa.approved_by,
---         sa.remarks,
---         sa.approved_date
---     FROM studentapproval sa
---     WHERE sa.student_id = p_student_id
---     ORDER BY sa.id DESC;
+--     NEW.updated_date = NOW();
+--     RETURN NEW;
 -- END;
--- $$ LANGUAGE plpgsql;
+-- $$ language 'plpgsql';
+
+-- -- Trigger for updated_date
+-- DROP TRIGGER IF EXISTS update_chatbot_qa_updated_date ON tblChatbotQA;
+-- CREATE TRIGGER update_chatbot_qa_updated_date 
+--     BEFORE UPDATE ON tblChatbotQA 
+--     FOR EACH ROW 
+--     EXECUTE FUNCTION update_updated_date_column();

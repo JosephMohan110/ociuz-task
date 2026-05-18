@@ -33,7 +33,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'student',
-    'chat_bot',
+    # 'chat_bot',
 ]
 
 MIDDLEWARE = [

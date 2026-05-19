@@ -10,6 +10,8 @@ import re
 import uuid
 from pathlib import Path
 
+from PIL import Image, UnidentifiedImageError
+
 from django.conf import settings
 from django.shortcuts import render, redirect
 from django.urls import reverse
@@ -231,9 +233,44 @@ def _save_student_image(image_file):
     filename = f"{uuid.uuid4().hex}{extension}"
     save_path = uploads_dir / filename
 
-    with open(save_path, 'wb') as destination:
-        for chunk in image_file.chunks():
-            destination.write(chunk)
+    # Resize image to profile dimensions (max 300x300) to avoid very large files
+    try:
+        image = Image.open(image_file)
+    except UnidentifiedImageError:
+        # Fallback: save raw if Pillow cannot identify image
+        image_file.seek(0)
+        with open(save_path, 'wb') as destination:
+            for chunk in image_file.chunks():
+                destination.write(chunk)
+        return f'student_images/{filename}'
+
+    max_size = (300, 300)
+    # Use thumbnail to preserve aspect ratio
+    image.thumbnail(max_size, Image.LANCZOS)
+
+    # Choose format based on extension
+    fmt = 'PNG' if extension == '.png' else 'JPEG'
+
+    # Convert images with alpha channel to RGB for JPEG
+    if fmt == 'JPEG' and image.mode in ('RGBA', 'LA'):
+        background = Image.new('RGB', image.size, (255, 255, 255))
+        if image.mode == 'RGBA':
+            background.paste(image, mask=image.split()[3])
+        else:
+            background.paste(image)
+        image = background
+    elif image.mode == 'P' and fmt == 'JPEG':
+        image = image.convert('RGB')
+
+    # Save optimized image
+    try:
+        image.save(save_path, format=fmt, quality=85, optimize=True)
+    except Exception:
+        # If saving with Pillow fails, fallback to raw write
+        image_file.seek(0)
+        with open(save_path, 'wb') as destination:
+            for chunk in image_file.chunks():
+                destination.write(chunk)
 
     return f'student_images/{filename}'
 
@@ -265,7 +302,7 @@ def student_list(request):
 def add_student(request):
     # """
     # GET: blank form.
-    # POST: validate → INSERT student + Pending approval → redirect to list.
+    # POST: validate  INSERT student + Pending approval → redirect to list.
     # """
     form_data = {'name': '', 'phone': '', 'email': '', 'course': ''}
     courses = db_get_courses()

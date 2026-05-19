@@ -103,20 +103,6 @@ def db_update_student(student_id, name, phone, email, course_id, student_image_p
             return cur.fetchone()[0]
 
 
-# DELETE old code..
-
-
-# def db_delete_student(student_id):
-#     # """
-#     # DELETE a student and ALL related approval records.
-#     # Returns True if the student row was deleted.
-#     # """
-#     with connection.cursor() as cur:
-#         cur.execute(
-#             "SELECT fnDeleteStudent(%s)",
-#             [student_id]
-#         )
-#         return cur.fetchone()[0]
 
 
 
@@ -153,42 +139,6 @@ def db_get_deleted_students():
         cur.execute("SELECT * FROM fnGetDeletedStudents()")
         return _fetchall(cur)
 
-
-
-
-
-
-# this is replace by the new procedure
-# # APPROVE
-
-# def db_approve_student(student_id, approved_by='Admin', remarks=''):
-#     # """
-#     # Insert an 'Approved' record into student_approval.
-#     # Returns True on success.
-#     # """
-#     with transaction.atomic():
-#         with connection.cursor() as cur:
-#             cur.execute(
-#                 "SELECT fnApproveStudent(%s, %s, %s)",
-#                 [student_id, approved_by, remarks]
-#             )
-#             return cur.fetchone()[0]
-
-
-# # REJECT
-
-# def db_reject_student(student_id, approved_by='Admin', remarks=''):
-#     # """
-#     # Insert a 'Rejected' record into student_approval.
-#     # Returns True on success.
-#     # """
-#     with transaction.atomic():
-#         with connection.cursor() as cur:
-#             cur.execute(
-#                 "SELECT fnRejectStudent(%s, %s, %s)",
-#                 [student_id, approved_by, remarks]
-#             )
-#             return cur.fetchone()[0]
 
 
 

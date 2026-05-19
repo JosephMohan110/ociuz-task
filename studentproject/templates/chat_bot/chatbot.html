@@ -261,7 +261,7 @@
         </div>
         
         <div class="chatbot-stats" id="chatbotStats">
-            <span>📚 Loading...</span>
+            <span>📚 ^_^. . Haiii</span>
             <span>💡 Ask me anything!</span>
         </div>
         
@@ -274,6 +274,10 @@
             </div>
         </div>
         
+
+
+        <!-- message of user enter here using input field and send button.. -->
+         <!-- after clicking send button the message is sent to backend through js sendMessage() -->
         <div class="chatbot-input-area">
             <input type="text" class="chatbot-input" id="chatbotInput" 
                    placeholder="Type your message..." autocomplete="off">
@@ -357,6 +361,85 @@
         }
 
         // Send message to backend
+        // read message and store in the variable "message"
+        async function sendMessage() {
+            const message = inputField.value.trim();
+            if (!message) return;
+            
+            addMessage(message, true);
+            inputField.value = '';
+            showTyping();
+            
+
+            // This part sends question to Django:
+            // chat bot ent ent url aa ethu /chat_bot/api/send/
+            // path('api/send/', views.chat_api, name='chat_api')
+            // through bellow code we call the url and sent the data
+            try {
+                const response = await fetch('/chat_bot/api/send/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message: message, 
+                        session_id: sessionId 
+                    })
+                });
+                
+                const data = await response.json();   //.. backend responce wil get here
+                hideTyping();
+                
+                if (data.success) {
+                    addMessage(data.response); // messae sent to front end.. if meaase not et it will sent sorry
+                } else {
+                    addMessage("Sorry, I'm having trouble. Please try again.");
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage("Network error. Please check your connection.");
+            }
+        }
+
+        
+
+        // Event listeners
+        sendBtn.addEventListener('click', sendMessage);
+        inputField.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Load stats on page load
+        loadStats();
+        
+        // Refresh stats every minute
+        setInterval(loadStats, 60000);
+    })();
+</script>
+
+
+<script>
+    (function() {
+        // ... (Keep session management and DOM elements exactly as they are)
+
+
+        // crf token illa ill chat response will block  . to prevent ti we use cookies..
+        
+        // --- ADD THIS HELPER TO EXTRACT THE CSRF COOKIE SECURELY ---
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Send message to backend
         async function sendMessage() {
             const message = inputField.value.trim();
             if (!message) return;
@@ -368,7 +451,10 @@
             try {
                 const response = await fetch('/chat_bot/api/send/', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken') // Added security configuration token 
+                    },
                     body: JSON.stringify({ 
                         message: message, 
                         session_id: sessionId 
@@ -389,31 +475,6 @@
             }
         }
 
-        // Load statistics
-        async function loadStats() {
-            try {
-                const response = await fetch('/chat_bot/api/stats/');
-                const data = await response.json();
-                statsBar.innerHTML = `
-                    <span>📚 ${data.total_qa || 0} Answers</span>
-                    <span>💬 ${data.today_chats || 0} Today</span>
-                    <span>💡 Ask me anything!</span>
-                `;
-            } catch (error) {
-                statsBar.innerHTML = `<span>🤖 Chatbot Ready</span><span>💡 Ask me anything!</span>`;
-            }
-        }
-
-        // Event listeners
-        sendBtn.addEventListener('click', sendMessage);
-        inputField.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
-
-        // Load stats on page load
-        loadStats();
-        
-        // Refresh stats every minute
-        setInterval(loadStats, 60000);
+        // ... (Keep loadStats() and all remaining code exactly as it is)
     })();
 </script>

@@ -36,7 +36,7 @@
             <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
             <td>
                 {% if student.student_image %}
-                    <img src="/media/{{ student.student_image }}" >
+                    <img src="/media/{{ student.student_image }}" width="80" height="80" >
                 {% else %}
                 .
                 {% endif %}

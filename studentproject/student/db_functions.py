@@ -369,3 +369,79 @@ def db_generate_document_number(document_code):
             cur.execute("SELECT spGenerateDocumentNumber(%s)", [document_code])
             row = cur.fetchone()
             return row[0] if row else None
+        
+
+
+
+
+
+
+# ==========================================
+# MODULE 5: GENERIC APPROVAL ENGINE
+# ==========================================
+
+def db_process_document_action(doc_code, record_id, current_status, action_name, role_name, performed_by, remarks=''):
+    """
+    The universal function for transitioning ANY document in the ERP.
+    Returns the 'new_status_code' if successful.
+    Raises an Exception if the workflow rules forbid the action.
+    """
+    with transaction.atomic():  # Wrapped in atomic to ensure the history insert is tied to the parent update
+        with connection.cursor() as cur:
+            try:
+                cur.execute(
+                    "SELECT spProcessDocumentAction(%s, %s, %s, %s, %s, %s, %s)",
+                    [doc_code, str(record_id), current_status, action_name, role_name, performed_by, remarks]
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
+            except Exception as e:
+                # Catch Postgres RAISE EXCEPTION errors and pass them to Django
+                raise Exception(str(e).split('\n')[0]) # Cleans up the Postgres error string
+            
+
+
+
+
+
+
+
+# ==========================================
+# MODULE 6: ERP AUDIT & HISTORY TRACKING
+# ==========================================
+
+def get_client_ip(request):
+    """Utility to extract the user's IP Address from the Django request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+def db_set_audit_context(cursor, user_name, ip_address):
+    """
+    Passes the Django User and IP to PostgreSQL for the trigger to use.
+    This bridges the gap between Web Requests and Database Triggers.
+    """
+    cursor.execute("SET LOCAL erp.current_user = %s", [user_name])
+    cursor.execute("SET LOCAL erp.current_ip = %s", [ip_address])
+
+def db_get_document_history(document_code, record_id):
+    """
+    Fetches the complete lifecycle audit trail of any specific record.
+    """
+    with connection.cursor() as cur:
+        cur.execute("""
+            SELECT h.HistoryId, h.Action, h.OldStatus, h.NewStatus, 
+                   h.Remarks, h.ActionBy, h.ActionDate, h.IPAddress,
+                   h.OldData, h.NewData
+            FROM tblDocumentHistory h
+            JOIN tblDocumentMaster d ON h.DocumentId = d.DocumentId
+            WHERE d.DocumentCode = %s AND h.RecordId = %s
+            ORDER BY h.HistoryId DESC
+        """, [document_code, str(record_id)])
+        return _fetchall(cur)
+
+
+

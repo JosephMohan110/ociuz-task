@@ -5,6 +5,7 @@
 # ─────────────────────────────────────────────────────────────
 
 import imghdr
+from multiprocessing.dummy import connection
 import os
 import re
 import uuid
@@ -21,6 +22,10 @@ from django.http import JsonResponse
 from functools import wraps
 from django.shortcuts import render
 from .db_functions import db_generate_document_number
+from .db_functions import db_process_document_action
+from .db_functions import get_client_ip, db_set_audit_context
+
+
 
 
 
@@ -1063,5 +1068,93 @@ def your_create_view(request):
             messages.error(request, f'Failed to generate number: {str(e)}')
             
         return redirect('some_list_view')
+
+
+
+
+
+
+
+def handle_document_approval(request, module_code, record_id):
+    """
+    A single, generic view that handles approvals for ANY module.
+    """
+    if request.method == 'POST':
+        action_name = request.POST.get('action_name') # e.g., 'Approve', 'Reject'
+        remarks = request.POST.get('remarks', '')
+        
+        # In a real app, grab these from the DB and the User Session
+        current_status = request.POST.get('current_status') # e.g., 'PENDING'
+        user_role = 'Manager' # request.user.role
+        username = 'AdminUser' # request.user.username
+
+        try:
+            # 1. Ask the Universal Engine to process the workflow
+            new_status_code = db_process_document_action(
+                doc_code=module_code,
+                record_id=record_id,
+                current_status=current_status,
+                action_name=action_name,
+                role_name=user_role,
+                performed_by=username,
+                remarks=remarks
+            )
+            
+            # 2. Update the specific table state based on the engine's result
+            if module_code == 'STUDENT_ADM':
+                # Update student table
+                # db_update_student_status(record_id, new_status_code)
+                pass
+            elif module_code == 'LEAVE_REQ':
+                # Update leave table
+                # db_update_leave_status(record_id, new_status_code)
+                pass
+
+            messages.success(request, f'Document transitioned to {new_status_code} successfully.')
+            
+        except Exception as e:
+            # This catches the PostgreSQL 'Workflow Security Violation' exceptions
+            messages.error(request, str(e))
+
+        return redirect(request.META.get('HTTP_REFERER', '/'))
+    
+
+
+
+
+
+
+
+def update_student_view(request, student_id):
+    if request.method == 'POST':
+        # 1. Get frontend metadata
+        username = 'Admin' # In production: request.user.username
+        ip_addr = get_client_ip(request)
+        
+        # 2. Extract form data
+        name = request.POST.get('name')
+        phone = request.POST.get('phone')
+
+        try:
+            # 3. Use an atomic transaction to bind the Web User to the DB Trigger
+            with transaction.atomic():
+                with connection.cursor() as cur:
+                    # Tell Postgres WHO is about to make this change
+                    db_set_audit_context(cur, username, ip_addr)
+                    
+                    # Run the normal update. 
+                    # The Postgres Trigger will FIRE AUTOMATICALLY and log the OldData/NewData!
+                    cur.execute(
+                        "UPDATE students SET name = %s, phone = %s WHERE id = %s", 
+                        [name, phone, student_id]
+                    )
+            
+            messages.success(request, 'Record updated and audited successfully.')
+        except Exception as e:
+            messages.error(request, f'Update failed: {str(e)}')
+            
+        return redirect('student_list')
+
+
 
 

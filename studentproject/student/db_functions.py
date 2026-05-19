@@ -238,3 +238,134 @@ def db_get_global_approval_history(search='', action='', date_from='', date_to='
             [search or None, action or None, date_from or None, date_to or None]
         )
         return _fetchall(cur)
+    
+
+
+
+
+
+
+
+# ==========================================
+# MODULE 1: ERP DOCUMENT MASTER
+# ==========================================
+
+def db_get_all_documents():
+    """
+    Fetch all active ERP Document Configurations dynamically.
+    Returns a list of dicts.
+    """
+    with connection.cursor() as cur:
+        cur.execute("SELECT * FROM fnGetDocumentMasters()")
+        return _fetchall(cur)
+
+def db_generate_document_number(document_code):
+    """
+    Dynamically generates the next sequence number for a module (e.g., ADM-0001).
+    Runs inside a transaction to ensure database row-locking works correctly.
+    """
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            cur.execute("SELECT fnGenerateNextDocumentNumber(%s)", [document_code])
+            return cur.fetchone()[0]
+
+def db_check_approval_required(document_code):
+    """
+    Dynamically checks if a specific module requires workflow approval.
+    Useful for bypassing approval statuses if a document is set to auto-approve.
+    """
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT ApprovalRequired FROM tblDocumentMaster WHERE DocumentCode = %s AND IsActive = TRUE",
+            [document_code]
+        )
+        row = cur.fetchone()
+        return row[0] if row else True # Default to True for safety if not found
+    
+
+
+
+# ==========================================
+# MODULE 2: ERP STATUS MANAGEMENT
+# ==========================================
+
+def db_get_all_statuses():
+    """
+    Fetch all active workflow statuses.
+    Used by frontend to build dynamic dropdowns or filter tabs.
+    """
+    with connection.cursor() as cur:
+        cur.execute("SELECT * FROM fnGetAllStatuses()")
+        return _fetchall(cur)
+
+def db_get_initial_status():
+    """
+    Returns the starting status code for any newly created record (e.g., 'DRAFT').
+    """
+    with connection.cursor() as cur:
+        cur.execute("SELECT fnGetInitialStatus()")
+        row = cur.fetchone()
+        return row[0] if row else 'DRAFT'
+
+def db_get_next_status(current_status_code):
+    """
+    Queries the dynamic workflow engine to find the next sequential status.
+    Eliminates hardcoded `if status == 'Pending' -> 'Approved'` logic.
+    """
+    with connection.cursor() as cur:
+        cur.execute("SELECT fnGetNextWorkflowStatus(%s)", [current_status_code])
+        row = cur.fetchone()
+        return row[0] if row else None
+    
+
+
+
+
+# ==========================================
+# MODULE 3: ERP WORKFLOW CONFIGURATION
+# ==========================================
+
+def db_get_available_actions(doc_code, current_status_code, role_name):
+    """
+    Returns a list of valid actions (buttons) a user can perform.
+    Each dict contains: action_name, next_status_code, color_code.
+    """
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM fnGetAvailableActions(%s, %s, %s)",
+            [doc_code, current_status_code, role_name]
+        )
+        return _fetchall(cur)
+
+def db_validate_workflow_transition(doc_code, current_status_code, action_name, role_name):
+    """
+    Validates if an action is allowed and returns the new status code.
+    Throws a database error if the transition is illegal.
+    """
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT fnProcessWorkflowAction(%s, %s, %s, %s)",
+            [doc_code, current_status_code, action_name, role_name]
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+    
+
+
+
+
+# ==========================================
+# MODULE 4: DYNAMIC DOCUMENT GENERATION
+# ==========================================
+
+def db_generate_document_number(document_code):
+    """
+    Calls spGenerateDocumentNumber to safely generate a unique, sequential ID.
+    CRITICAL: This MUST be wrapped in transaction.atomic(). 
+    The 'FOR UPDATE' lock in Postgres only releases when the Django transaction commits.
+    """
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            cur.execute("SELECT spGenerateDocumentNumber(%s)", [document_code])
+            row = cur.fetchone()
+            return row[0] if row else None

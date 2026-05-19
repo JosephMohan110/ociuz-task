@@ -20,6 +20,8 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from functools import wraps
 from django.shortcuts import render
+from .db_functions import db_generate_document_number
+
 
 
 
@@ -41,6 +43,14 @@ from .db_functions import (
     db_course_exists,
     db_get_dashboard_stats,
     db_get_global_approval_history,
+    db_check_approval_required,
+    db_generate_document_number,
+    db_get_all_documents,
+    db_get_all_statuses,
+    db_get_next_status,
+    db_validate_workflow_transition,
+    db_get_available_actions,
+
 )
 
 
@@ -863,5 +873,195 @@ def custom_400(request, exception):
         'code': 400,
         'message': 'Bad Request'
     }, status=400)
+
+
+
+
+
+
+
+
+
+
+
+# Add these imports to your existing db_functions import block at the top:
+# db_get_all_documents, db_generate_document_number, db_check_approval_required
+
+def api_get_document_masters(request):
+    """
+    API Endpoint to fetch all dynamic ERP module configurations.
+    Allows the frontend to render generic navigation or forms without hardcoding module names.
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        documents = db_get_all_documents()
+        return JsonResponse({
+            'success': True,
+            'documents': documents
+        })
+    except Exception as e:
+        return JsonResponse({'error': 'Failed to fetch document masters', 'details': str(e)}, status=500)
+
+def api_test_generate_doc_number(request):
+    """
+    TEST API: Pass ?doc_code=STUDENT_ADM to see the dynamic numbering in action.
+    """
+    doc_code = request.GET.get('doc_code', '').strip()
+    if not doc_code:
+        return JsonResponse({'error': 'doc_code parameter is required'}, status=400)
+    
+    try:
+        new_number = db_generate_document_number(doc_code)
+        requires_approval = db_check_approval_required(doc_code)
+        
+        return JsonResponse({
+            'success': True,
+            'document_code': doc_code,
+            'generated_number': new_number,
+            'requires_workflow_approval': requires_approval
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+
+
+
+
+
+# Add these to your db_functions import block at the top:
+# db_get_all_statuses, db_get_initial_status, db_get_next_status
+
+def api_get_statuses(request):
+    """
+    API Endpoint to fetch all statuses. 
+    The frontend can use this to render colored badges dynamically:
+    <span style="background-color: {{ status.color_code }}">{{ status.status_name }}</span>
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    try:
+        statuses = db_get_all_statuses()
+        return JsonResponse({
+            'success': True,
+            'statuses': statuses
+        })
+    except Exception as e:
+        return JsonResponse({'error': 'Failed to fetch statuses', 'details': str(e)}, status=500)
+
+def api_test_workflow_transition(request):
+    """
+    TEST API: Pass ?current_status=DRAFT to see what the database determines is next.
+    """
+    current_status = request.GET.get('current_status', '').strip().upper()
+    if not current_status:
+        return JsonResponse({'error': 'current_status parameter is required'}, status=400)
+    
+    try:
+        next_status = db_get_next_status(current_status)
+        return JsonResponse({
+            'success': True,
+            'current_status': current_status,
+            'next_logical_status': next_status,
+            'message': 'No more hardcoded workflow logic!'
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+    
+
+
+
+
+# Add these to your db_functions import block:
+# db_get_available_actions, db_validate_workflow_transition
+
+def api_get_workflow_actions(request):
+    """
+    API: Used by the frontend to dynamically render action buttons.
+    Example GET: ?doc_code=LEAVE_REQ&status=PENDING&role=Manager
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    doc_code = request.GET.get('doc_code', '').strip()
+    status = request.GET.get('status', '').strip().upper()
+    role = request.GET.get('role', '').strip()
+
+    if not all([doc_code, status, role]):
+        return JsonResponse({'error': 'Missing required parameters'}, status=400)
+
+    try:
+        actions = db_get_available_actions(doc_code, status, role)
+        return JsonResponse({
+            'success': True,
+            'actions': actions  # Frontend will map these to <button> elements
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+def api_process_workflow_action(request):
+    """
+    API: Executes the workflow transition dynamically.
+    Instead of hardcoding status changes, this asks the DB what the next status is.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    doc_code = request.POST.get('doc_code', '').strip()
+    current_status = request.POST.get('current_status', '').strip().upper()
+    action_name = request.POST.get('action_name', '').strip()
+    role = request.POST.get('role', '').strip()
+    
+    # In a real app, 'role' would come from request.user (e.g., request.user.role)
+    # rather than being passed from the frontend, to prevent spoofing.
+
+    try:
+        # 1. Ask the DB to validate and return the new status
+        new_status_code = db_validate_workflow_transition(
+            doc_code, current_status, action_name, role
+        )
+
+        # 2. Here is where you would update your actual document table
+        # e.g., UPDATE leave_requests SET status = new_status_code WHERE id = X
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Action "{action_name}" processed successfully.',
+            'new_status': new_status_code
+        })
+    except Exception as e:
+        # Catch the PostgreSQL Exception thrown by fnProcessWorkflowAction
+        return JsonResponse({'error': str(e)}, status=400)
+    
+
+
+
+
+
+
+
+def your_create_view(request):
+    if request.method == 'POST':
+        # 1. First, ask the ERP engine for the next unique number
+        try:
+            # Pass the dynamic code we created in Module 1
+            document_number = db_generate_document_number('STUDENT_ADM') 
+            
+            # -> Yields: "ADM-00001"
+            
+            # 2. Now, save your student/leave request with this official document_number
+            # db_add_student(document_number, name, phone, email, course...)
+            
+            messages.success(request, f'Document {document_number} generated successfully.')
+            
+        except Exception as e:
+            messages.error(request, f'Failed to generate number: {str(e)}')
+            
+        return redirect('some_list_view')
 
 

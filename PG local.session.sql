@@ -1,6 +1,6 @@
 
 
-SELECT * from students;
+-- SELECT * from students;
 -- SELECT * from tblCourse;
 -- SELECT * from studentapproval;
 -- SELECT * from tblStudentCourse;
@@ -1095,3 +1095,381 @@ SELECT * from students;
 --     BEFORE UPDATE ON tblChatbotQA 
 --     FOR EACH ROW 
 --     EXECUTE FUNCTION update_updated_date_column();
+
+
+
+
+
+
+
+
+
+
+-- -- ==========================================
+-- -- MODULE 1: ERP DOCUMENT MASTER 
+-- -- ==========================================
+
+-- -- 1. Create the Centralized Document Master Table
+-- CREATE TABLE IF NOT EXISTS tblDocumentMaster (
+--     DocumentId SERIAL PRIMARY KEY,
+--     DocumentName VARCHAR(100) NOT NULL UNIQUE,
+--     DocumentCode VARCHAR(50) NOT NULL UNIQUE,
+--     Prefix VARCHAR(10) NOT NULL,
+--     RunningNumber INT DEFAULT 0,
+--     ApprovalRequired BOOLEAN DEFAULT TRUE,
+--     IsActive BOOLEAN DEFAULT TRUE,
+--     CreatedBy VARCHAR(100) DEFAULT 'System',
+--     CreatedDate TIMESTAMP DEFAULT NOW(),
+--     UpdatedDate TIMESTAMP DEFAULT NOW()
+-- );
+
+
+
+-- -- 2. Insert Base ERP Modules dynamically (ON CONFLICT prevents duplication on re-runs)
+-- INSERT INTO tblDocumentMaster (DocumentName, DocumentCode, Prefix, RunningNumber, ApprovalRequired)
+-- VALUES 
+--     ('Student Admission', 'STUDENT_ADM', 'ADM', 0, TRUE),
+--     ('Leave Request', 'LEAVE_REQ', 'LEV', 0, TRUE),
+--     ('Fee Approval', 'FEE_APP', 'FEE', 0, TRUE),
+--     ('Purchase Request', 'PURCHASE_REQ', 'PUR', 0, TRUE),
+--     ('Expense Claim', 'EXPENSE_CLAIM', 'EXP', 0, TRUE)
+-- ON CONFLICT (DocumentCode) DO NOTHING;
+
+
+
+
+-- -- 3. FUNCTION: Fetch all active document configurations
+-- DROP FUNCTION IF EXISTS fnGetDocumentMasters();
+-- CREATE OR REPLACE FUNCTION fnGetDocumentMasters()
+-- RETURNS TABLE(
+--     document_id INT, 
+--     document_name VARCHAR, 
+--     document_code VARCHAR, 
+--     prefix VARCHAR, 
+--     running_number INT, 
+--     approval_required BOOLEAN
+-- ) AS $$
+-- BEGIN
+--     RETURN QUERY 
+--     SELECT 
+--         DocumentId, DocumentName, DocumentCode, Prefix, RunningNumber, ApprovalRequired
+--     FROM tblDocumentMaster 
+--     WHERE IsActive = TRUE 
+--     ORDER BY DocumentId;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+-- -- 4. FUNCTION: Generate Next Document Number safely (e.g., ADM-0001)
+-- -- CRITICAL: Uses 'FOR UPDATE' to lock the row. This prevents race conditions if 
+-- -- two users try to generate a number at the exact same time.
+-- DROP FUNCTION IF EXISTS fnGenerateNextDocumentNumber(VARCHAR);
+-- CREATE OR REPLACE FUNCTION fnGenerateNextDocumentNumber(
+--     p_doc_code VARCHAR
+-- )
+-- RETURNS VARCHAR AS $$
+-- DECLARE
+--     v_prefix VARCHAR;
+--     v_next_number INT;
+--     v_generated_number VARCHAR;
+-- BEGIN
+--     -- Lock the specific document row for updating
+--     SELECT Prefix, RunningNumber + 1 
+--     INTO v_prefix, v_next_number
+--     FROM tblDocumentMaster
+--     WHERE DocumentCode = p_doc_code AND IsActive = TRUE
+--     FOR UPDATE;
+
+--     IF NOT FOUND THEN
+--         RAISE EXCEPTION 'ERP Configuration Error: Document Code % not found or is inactive.', p_doc_code;
+--     END IF;
+
+--     -- Update the running number in the master table
+--     UPDATE tblDocumentMaster
+--     SET RunningNumber = v_next_number, 
+--         UpdatedDate = NOW()
+--     WHERE DocumentCode = p_doc_code;
+
+--     -- Format the output standard ERP style: PREFIX-0000 (e.g., ADM-0001, LEV-0012)
+--     v_generated_number := v_prefix || '-' || LPAD(v_next_number::TEXT, 4, '0');
+
+--     RETURN v_generated_number;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+
+-- ==========================================
+-- MODULE 2: ERP STATUS MANAGEMENT MASTER
+-- ==========================================
+
+-- -- 1. Create the Centralized Status Master Table
+-- CREATE TABLE IF NOT EXISTS tblDocumentStatusMaster (
+--     StatusId SERIAL PRIMARY KEY,
+--     StatusName VARCHAR(50) NOT NULL UNIQUE,
+--     StatusCode VARCHAR(50) NOT NULL UNIQUE,
+--     SequenceOrder INT NOT NULL,           -- Controls the flow of the workflow (e.g., 10 -> 20 -> 30)
+--     IsFinalStatus BOOLEAN DEFAULT FALSE,  -- If TRUE, the document is locked (No more edits/approvals)
+--     ColorCode VARCHAR(20) DEFAULT '#000000', -- Used by UI to render badges dynamically
+--     IsActive BOOLEAN DEFAULT TRUE,
+--     CreatedBy VARCHAR(100) DEFAULT 'System',
+--     CreatedDate TIMESTAMP DEFAULT NOW(),
+--     UpdatedDate TIMESTAMP DEFAULT NOW()
+-- );
+
+-- 2. Insert Seed Data dynamically (ON CONFLICT prevents duplication)
+-- We use gaps in SequenceOrder (10, 20, 30) so you can easily insert a status (like 15) later without renumbering everything.
+
+-- INSERT INTO tblDocumentStatusMaster (StatusName, StatusCode, SequenceOrder, IsFinalStatus, ColorCode)
+-- VALUES 
+--     ('Draft', 'DRAFT', 10, FALSE, '#6c757d'),      -- Gray
+--     ('Pending', 'PENDING', 20, FALSE, '#ffc107'),    -- Yellow/Warning
+--     ('Approved', 'APPROVED', 30, TRUE, '#198754'),   -- Green
+--     ('Rejected', 'REJECTED', 90, TRUE, '#dc3545'),   -- Red
+--     ('Cancelled', 'CANCELLED', 95, TRUE, '#343a40'), -- Dark Gray
+--     ('Completed', 'COMPLETED', 100, TRUE, '#0d6efd') -- Blue
+-- ON CONFLICT (StatusCode) DO NOTHING;
+
+-- -- 3. FUNCTION: Fetch all active statuses
+-- DROP FUNCTION IF EXISTS fnGetAllStatuses();
+-- CREATE OR REPLACE FUNCTION fnGetAllStatuses()
+-- RETURNS TABLE(
+--     status_id INT, 
+--     status_name VARCHAR, 
+--     status_code VARCHAR, 
+--     sequence_order INT, 
+--     is_final_status BOOLEAN,
+--     color_code VARCHAR
+-- ) AS $$
+-- BEGIN
+--     RETURN QUERY 
+--     SELECT 
+--         StatusId, StatusName, StatusCode, SequenceOrder, IsFinalStatus, ColorCode
+--     FROM tblDocumentStatusMaster 
+--     WHERE IsActive = TRUE 
+--     ORDER BY SequenceOrder ASC;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+-- 4. FUNCTION: Get the Initial Status for any new document (Lowest Sequence)
+-- DROP FUNCTION IF EXISTS fnGetInitialStatus();
+-- CREATE OR REPLACE FUNCTION fnGetInitialStatus()
+-- RETURNS VARCHAR AS $$
+-- DECLARE
+--     v_initial_code VARCHAR;
+-- BEGIN
+--     SELECT StatusCode INTO v_initial_code
+--     FROM tblDocumentStatusMaster
+--     WHERE IsActive = TRUE
+--     ORDER BY SequenceOrder ASC
+--     LIMIT 1;
+    
+--     RETURN v_initial_code;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+-- -- 5. FUNCTION: Dynamic Workflow Engine - Get NEXT Status based on sequence
+-- -- This completely eliminates hardcoding! The system just asks "What's next?"
+-- DROP FUNCTION IF EXISTS fnGetNextWorkflowStatus(VARCHAR);
+-- CREATE OR REPLACE FUNCTION fnGetNextWorkflowStatus(p_current_code VARCHAR)
+-- RETURNS VARCHAR AS $$
+-- DECLARE
+--     v_current_seq INT;
+--     v_next_code VARCHAR;
+-- BEGIN
+--     -- Get the sequence of the current status
+--     SELECT SequenceOrder INTO v_current_seq
+--     FROM tblDocumentStatusMaster
+--     WHERE StatusCode = p_current_code AND IsActive = TRUE;
+
+--     IF NOT FOUND THEN
+--         RETURN NULL;
+--     END IF;
+
+--     -- Find the next logical step in the workflow
+--     SELECT StatusCode INTO v_next_code
+--     FROM tblDocumentStatusMaster
+--     WHERE SequenceOrder > v_current_seq 
+--       AND IsActive = TRUE 
+--       AND IsFinalStatus = FALSE
+--     ORDER BY SequenceOrder ASC
+--     LIMIT 1;
+
+--     RETURN v_next_code;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+-- -- ==========================================
+-- -- MODULE 3: ERP WORKFLOW CONFIGURATION ENGINE
+-- -- ==========================================
+
+-- -- 1. Create the Workflow Transition Table
+-- CREATE TABLE IF NOT EXISTS tblDocumentWorkflow (
+--     WorkflowId SERIAL PRIMARY KEY,
+--     DocumentId INT REFERENCES tblDocumentMaster(DocumentId),
+--     CurrentStatusId INT REFERENCES tblDocumentStatusMaster(StatusId),
+--     NextStatusId INT REFERENCES tblDocumentStatusMaster(StatusId),
+--     ActionName VARCHAR(50) NOT NULL, -- The button text (e.g., 'Approve', 'Reject', 'Submit')
+--     RoleName VARCHAR(50) NOT NULL,   -- Who can perform this action
+--     IsActive BOOLEAN DEFAULT TRUE,
+--     CreatedDate TIMESTAMP DEFAULT NOW(),
+--     UpdatedDate TIMESTAMP DEFAULT NOW(),
+--     -- A role can only perform a specific action once per state on a specific document type
+--     UNIQUE (DocumentId, CurrentStatusId, ActionName, RoleName) 
+-- );
+
+
+
+-- -- 2. Insert Seed Data Dynamically (NO HARDCODED IDs)
+-- -- We use subqueries to fetch the exact IDs based on the codes we defined in Mod 1 & 2.
+-- DO $$ 
+-- BEGIN
+--     -- Example: Leave Request Workflow
+--     -- 1. Employee Submits Draft -> Pending
+--     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
+--     SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Submit', 'Employee'
+--     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
+--     WHERE d.DocumentCode = 'LEAVE_REQ' AND s1.StatusCode = 'DRAFT' AND s2.StatusCode = 'PENDING'
+--     ON CONFLICT DO NOTHING;
+
+--     -- 2. Manager Approves Pending -> Approved
+--     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
+--     SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Approve', 'Manager'
+--     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
+--     WHERE d.DocumentCode = 'LEAVE_REQ' AND s1.StatusCode = 'PENDING' AND s2.StatusCode = 'APPROVED'
+--     ON CONFLICT DO NOTHING;
+
+--     -- 3. Manager Rejects Pending -> Rejected
+--     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
+--     SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Reject', 'Manager'
+--     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
+--     WHERE d.DocumentCode = 'LEAVE_REQ' AND s1.StatusCode = 'PENDING' AND s2.StatusCode = 'REJECTED'
+--     ON CONFLICT DO NOTHING;
+-- END $$;
+
+-- -- 3. FUNCTION: Get Available Actions (Renders dynamic UI buttons)
+-- DROP FUNCTION IF EXISTS fnGetAvailableActions(VARCHAR, VARCHAR, VARCHAR);
+-- CREATE OR REPLACE FUNCTION fnGetAvailableActions(
+--     p_doc_code VARCHAR,
+--     p_current_status_code VARCHAR,
+--     p_role_name VARCHAR
+-- )
+-- RETURNS TABLE (
+--     action_name VARCHAR,
+--     next_status_code VARCHAR,
+--     color_code VARCHAR
+-- ) AS $$
+-- BEGIN
+--     RETURN QUERY
+--     SELECT 
+--         w.ActionName, 
+--         ns.StatusCode AS next_status_code,
+--         ns.ColorCode  AS color_code
+--     FROM tblDocumentWorkflow w
+--     JOIN tblDocumentMaster d ON w.DocumentId = d.DocumentId
+--     JOIN tblDocumentStatusMaster cs ON w.CurrentStatusId = cs.StatusId
+--     JOIN tblDocumentStatusMaster ns ON w.NextStatusId = ns.StatusId
+--     WHERE d.DocumentCode = p_doc_code 
+--       AND cs.StatusCode = p_current_status_code
+--       AND w.RoleName = p_role_name
+--       AND w.IsActive = TRUE;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+-- -- 4. FUNCTION: Validate Transition and Process Workflow
+-- DROP FUNCTION IF EXISTS fnProcessWorkflowAction(VARCHAR, VARCHAR, VARCHAR, VARCHAR);
+-- CREATE OR REPLACE FUNCTION fnProcessWorkflowAction(
+--     p_doc_code VARCHAR,
+--     p_current_status_code VARCHAR,
+--     p_action_name VARCHAR,
+--     p_role_name VARCHAR
+-- )
+-- RETURNS VARCHAR AS $$
+-- DECLARE
+--     v_next_status_code VARCHAR;
+-- BEGIN
+--     -- Attempt to find the configured next status based on the provided parameters
+--     SELECT ns.StatusCode INTO v_next_status_code
+--     FROM tblDocumentWorkflow w
+--     JOIN tblDocumentMaster d ON w.DocumentId = d.DocumentId
+--     JOIN tblDocumentStatusMaster cs ON w.CurrentStatusId = cs.StatusId
+--     JOIN tblDocumentStatusMaster ns ON w.NextStatusId = ns.StatusId
+--     WHERE d.DocumentCode = p_doc_code 
+--       AND cs.StatusCode = p_current_status_code
+--       AND w.ActionName = p_action_name
+--       AND w.RoleName = p_role_name
+--       AND w.IsActive = TRUE;
+
+--     -- If no valid transition exists, throw an error
+--     IF NOT FOUND THEN
+--         RAISE EXCEPTION 'Workflow Error: Action "%" is not permitted for Role "%" on Document "%" in Status "%"', 
+--             p_action_name, p_role_name, p_doc_code, p_current_status_code;
+--     END IF;
+
+--     RETURN v_next_status_code;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+
+-- ==========================================
+-- MODULE 4: DYNAMIC DOCUMENT NUMBER GENERATION
+-- ==========================================
+
+DROP FUNCTION IF EXISTS spGenerateDocumentNumber(VARCHAR);
+
+-- NOTE: We use a FUNCTION returning VARCHAR so Django can easily call it via SELECT.
+-- The 'sp' prefix denotes a Stored Procedure-like behavior.
+CREATE OR REPLACE FUNCTION spGenerateDocumentNumber(
+    p_document_code VARCHAR
+)
+RETURNS VARCHAR AS $$
+DECLARE
+    v_prefix VARCHAR;
+    v_current_number INT;
+    v_new_number INT;
+    v_generated_number VARCHAR;
+BEGIN
+    -- 1. ROW-LEVEL LOCKING (The Concurrency Secret)
+    -- 'FOR UPDATE' locks this specific document's row. 
+    -- If two users click 'Submit' at the exact same time, the second user 
+    -- is forced to wait until the first user's transaction finishes.
+    SELECT Prefix, RunningNumber 
+    INTO v_prefix, v_current_number
+    FROM tblDocumentMaster
+    WHERE DocumentCode = p_document_code AND IsActive = TRUE
+    FOR UPDATE;
+
+    -- 2. Validate if the document type exists
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'ERP Configuration Error: Document Code "%" not found or is inactive.', p_document_code;
+    END IF;
+
+    -- 3. Increment the running number
+    v_new_number := COALESCE(v_current_number, 0) + 1;
+
+    -- 4. Update the master table to save the new running number
+    UPDATE tblDocumentMaster
+    SET RunningNumber = v_new_number,
+        UpdatedDate = NOW()
+    WHERE DocumentCode = p_document_code;
+
+    -- 5. Format the new document number with 5 digits (e.g., ADM-00001, LEV-00042)
+    v_generated_number := v_prefix || '-' || LPAD(v_new_number::TEXT, 5, '0');
+
+    -- 6. Return the fully formatted string
+    RETURN v_generated_number;
+END;
+$$ LANGUAGE plpgsql;

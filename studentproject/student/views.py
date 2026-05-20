@@ -10,6 +10,10 @@ import os
 import re
 import uuid
 from pathlib import Path
+import json
+from django.views.decorators.csrf import csrf_exempt
+from django.core.serializers.json import DjangoJSONEncoder
+
 
 from PIL import Image, UnidentifiedImageError
 
@@ -27,9 +31,6 @@ from .db_functions import get_client_ip, db_set_audit_context
 
 
 
-
-
-
 from .db_functions import (
     db_get_all_students,
     db_get_student_by_id,
@@ -39,7 +40,6 @@ from .db_functions import (
     db_delete_student,
     db_restore_student,
     db_get_deleted_students,
-    # db_approve_student,
     # db_approve_student,
     # db_reject_student,
     db_process_student_approval,
@@ -57,9 +57,14 @@ from .db_functions import (
     db_get_available_actions,
     db_create_leave_request,
     db_get_leave_requests,
+    db_get_document_history,
+    db_get_erp_dashboard_metrics,
+    db_get_erp_recent_activities,
+    db_get_dynamic_documents,
+    db_create_dynamic_document,
+    db_update_dynamic_document
 
 )
-
 
 
 
@@ -1200,15 +1205,248 @@ def add_leave_request(request):
         
     return render(request, 'leave/add_leave.html')
 
-# ==========================================
-# 🚀 THE MAGIC: Reusing the Generic Engine
-# ==========================================
-# To approve, reject, or submit this leave request, your HTML just points to 
-# the EXACT SAME view we updated in Module 5, passing 'LEAVE_REQ' as the module code:
 
-# Example HTML Button in your template:
-# <form action="{% url 'handle_document_approval' module_code='LEAVE_REQ' record_id=leave.id %}" method="POST">
-#     <input type="hidden" name="action_name" value="Approve">
-#     <input type="hidden" name="current_status" value="{{ leave.status }}">
-#     <button type="submit">Approve Leave</button>
-# </form>
+
+
+
+
+
+# ==========================================
+# MODULE 9: RESTful GENERIC APIs
+# ==========================================
+
+
+# --- 1. REUSABLE RESPONSE & ERROR HANDLER ---
+
+def api_response(success=True, data=None, message='', status_code=200, meta=None):
+    """ Standardized JSON structure for ALL API responses. """
+    response = {
+        'success': success,
+        'message': message,
+        'data': data or {},
+    }
+    if meta:
+        response['meta'] = meta
+    return JsonResponse(response, status=status_code, encoder=DjangoJSONEncoder)
+
+
+def api_error_handler(view_func):
+    """ Centralized API try-catch block. Never drops an HTML error page. """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        try:
+            return view_func(request, *args, **kwargs)
+        except Exception as e:
+            # Clean up PostgreSQL raw exception strings
+            error_msg = str(e).split('\n')[0].replace('EXCEPTION:', '').strip()
+            return api_response(success=False, message=error_msg, status_code=400)
+    return wrapper
+
+
+# --- 2. THE GENERIC API ENDPOINTS ---
+
+@csrf_exempt
+@api_error_handler
+def api_v1_get_document_types(request):
+    """ GET: Lists all available ERP modules (Student, Leave, etc.) """
+    docs = db_get_all_documents()
+    return api_response(data=docs, message='Document Types retrieved')
+
+
+@csrf_exempt
+@api_error_handler
+def api_v1_get_status_master(request):
+    """ GET: Lists all available global workflow statuses """
+    statuses = db_get_all_statuses()
+    return api_response(data=statuses, message='Status Master retrieved')
+
+
+@csrf_exempt
+@api_error_handler
+def api_v1_workflow_config(request):
+    """ GET: Gets buttons/actions available for a specific state """
+    doc_code = request.GET.get('doc_code')
+    status_code = request.GET.get('status')
+    role = request.GET.get('role', 'Manager')
+
+    if not doc_code or not status_code:
+        return api_response(success=False, message='doc_code and status are required', status_code=400)
+
+    actions = db_get_available_actions(doc_code, status_code, role)
+    return api_response(data=actions, message='Workflow Actions retrieved')
+
+
+@csrf_exempt
+@api_error_handler
+def api_v1_dashboard_data(request):
+    """ GET: Retrieves analytical statistics """
+    stats = db_get_dashboard_stats()
+    return api_response(data=stats, message='Dashboard Data retrieved')
+
+
+@csrf_exempt
+@api_error_handler
+def api_v1_dynamic_documents(request, doc_code):
+    """ 
+    GET: List all records for any module dynamically (with pagination & search).
+    POST: Create a new record in any module dynamically.
+    """
+    if request.method == 'GET':
+        search = request.GET.get('search', '')
+        limit = int(request.GET.get('limit', 10))
+        offset = int(request.GET.get('offset', 0))
+
+        results = db_get_dynamic_documents(doc_code, search, limit, offset)
+        
+        return api_response(
+            data=results, 
+            message=f'{doc_code} records retrieved',
+            meta={'search': search, 'limit': limit, 'offset': offset}
+        )
+
+    elif request.method == 'POST':
+        # Create Generic Document via JSON payload
+        try:
+            payload = json.loads(request.body)
+        except json.JSONDecodeError:
+            return api_response(success=False, message='Invalid JSON body', status_code=400)
+
+        user = request.GET.get('user', 'API_User') # In prod: request.user.username
+        result = db_create_dynamic_document(doc_code, payload, created_by=user)
+        return api_response(data=result, message=f'{doc_code} created successfully', status_code=201)
+
+    return api_response(success=False, message='Method Not Allowed', status_code=405)
+
+
+@csrf_exempt
+@api_error_handler
+def api_v1_dynamic_document_detail(request, doc_code, record_id):
+    """
+    PUT: Dynamically update an existing record (resets workflow).
+    """
+    if request.method == 'PUT':
+        try:
+            payload = json.loads(request.body)
+        except json.JSONDecodeError:
+            return api_response(success=False, message='Invalid JSON body', status_code=400)
+
+        user = request.GET.get('user', 'API_User')
+        result = db_update_dynamic_document(doc_code, record_id, payload, updated_by=user)
+        return api_response(data=result, message=f'{doc_code} record {record_id} updated successfully')
+
+    return api_response(success=False, message='Method Not Allowed', status_code=405)
+
+
+@csrf_exempt
+@api_error_handler
+def api_v1_document_history(request, doc_code, record_id):
+    """ GET: Retrieves the full forensic lifecycle audit log of any document. """
+    history = db_get_document_history(doc_code, record_id)
+    return api_response(data=history, message=f'History for {doc_code} {record_id} retrieved')
+
+
+@csrf_exempt
+@api_error_handler
+def api_v1_process_workflow(request):
+    """ POST: Process transition for ANY document module dynamically. """
+    if request.method != 'POST':
+        return api_response(success=False, message='Method Not Allowed', status_code=405)
+
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        return api_response(success=False, message='Invalid JSON body', status_code=400)
+
+    doc_code = payload.get('doc_code')
+    record_id = payload.get('record_id')
+    current_status = payload.get('current_status')
+    action_name = payload.get('action_name')
+    remarks = payload.get('remarks', '')
+    role = payload.get('role', 'Manager') 
+    username = payload.get('username', 'API_User')
+
+    if not all([doc_code, record_id, current_status, action_name]):
+        return api_response(success=False, message='Missing required parameters', status_code=400)
+
+    # Call the Generic ERP Approval Engine (From Module 5)
+    new_status = db_process_document_action(
+        doc_code=doc_code,
+        record_id=record_id,
+        current_status=current_status,
+        action_name=action_name,
+        role_name=role,
+        performed_by=username,
+        remarks=remarks
+    )
+    
+    return api_response(
+        data={'new_status': new_status}, 
+        message=f'Workflow transitioned to {new_status}'
+    )
+
+
+
+
+
+# ==========================================
+# MODULE 10: ERP DASHBOARD VIEWS
+# ==========================================
+
+@global_error_handler
+def erp_dashboard_view(request):
+    """
+    Renders the central ERP Dashboard UI.
+    Fetches aggregated metrics via a single optimized JSON query.
+    """
+    # 1. Fetch the unified metrics object
+    metrics = db_get_erp_dashboard_metrics()
+    
+    # 2. Fetch the recent activities stream (limit to 10)
+    recent_activities = db_get_erp_recent_activities(limit=10)
+    
+    return render(request, 'student/erp_dashboard.html', {
+        'admissions': metrics.get('admissions', {}),
+        'leaves': metrics.get('leaves', {}),
+        'course_wise': metrics.get('course_wise', []),
+        'approvals_30d': metrics.get('approvals_30d', {}),
+        'recent_activities': recent_activities
+    })
+
+
+@csrf_exempt
+@api_error_handler
+def api_v1_erp_dashboard(request):
+    """
+    API Endpoint: Returns the exact same metrics object as a JSON response.
+    Ideal for Single Page Applications (React/Vue) or Mobile Apps.
+    """
+    if request.method != 'GET':
+        return api_response(success=False, message='Method Not Allowed', status_code=405)
+
+    metrics = db_get_erp_dashboard_metrics()
+    recent_activities = db_get_erp_recent_activities(limit=5)
+    
+    # Bundle into a cohesive API response
+    dashboard_data = {
+        'metrics': metrics,
+        'recent_activities': [
+            {
+                'history_id': act['history_id'],
+                'module': act['document_name'],
+                'action': act['action_name'],
+                'status_change': f"{act['old_status']} -> {act['new_status']}",
+                'performed_by': act['performed_by'],
+                'date': act['performed_date'].isoformat() if act['performed_date'] else None
+            }
+            for act in recent_activities
+        ]
+    }
+    
+    return api_response(data=dashboard_data, message='ERP Dashboard stats retrieved')
+
+
+
+
+
+
+

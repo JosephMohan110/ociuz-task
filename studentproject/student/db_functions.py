@@ -1,6 +1,6 @@
 
 from django.db import connection, transaction
-
+import json
 
 # PRIVATE HELPERS
 
@@ -475,3 +475,87 @@ def db_get_leave_requests(search_keyword=''):
     with connection.cursor() as cur:
         cur.execute("SELECT * FROM fnGetLeaveRequests(%s)", [search_keyword or None])
         return _fetchall(cur)
+
+
+
+
+
+# ==========================================
+# MODULE 9: GENERIC APIs (No Hardcoding)
+# ==========================================
+
+def db_get_dynamic_documents(doc_code, search='', limit=10, offset=0):
+    # """
+    # Generic listing that asks PostgreSQL to fetch rows dynamically as JSON.
+    # """
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT fnGetDynamicDocuments(%s, %s, %s, %s)",
+            [doc_code, search or None, limit, offset]
+        )
+        row = cur.fetchone()
+        return row[0] if row and row[0] else []
+
+
+def db_create_dynamic_document(doc_code, payload_dict, created_by='API_System'):
+    # """
+    # Submits a JSON payload to Postgres. Postgres will dynamically figure out 
+    # the target table, columns, ID, and workflow status.
+    # """
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            payload_json = json.dumps(payload_dict)
+            cur.execute(
+                "SELECT spCreateDynamicDocument(%s, %s::jsonb, %s)",
+                [doc_code, payload_json, created_by]
+            )
+            return cur.fetchone()[0]
+
+
+def db_update_dynamic_document(doc_code, record_id, payload_dict, updated_by='API_System'):
+    # """
+    # Dynamically updates a document. Postgres maps the payload keys to table columns.
+    # """
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            payload_json = json.dumps(payload_dict)
+            cur.execute(
+                "SELECT spUpdateDynamicDocument(%s, %s, %s::jsonb, %s)",
+                [doc_code, record_id, payload_json, updated_by]
+            )
+            return cur.fetchone()[0]
+        
+
+
+
+
+
+# ==========================================
+# MODULE 10: ERP DASHBOARD & ANALYTICS
+# ==========================================
+
+def db_get_erp_dashboard_metrics():
+    # """
+    # Calls PostgreSQL to compile all cross-module dashboard statistics into 
+    # a single JSON payload. This is highly optimized (1 DB hit vs 5+).
+    # """
+    with connection.cursor() as cur:
+        cur.execute("SELECT fnGetERPDashboardMetrics()")
+        row = cur.fetchone()
+        if row and row[0]:
+            # psycopg2 natively parses JSONB to dict, but if string, we load it
+            import json
+            return row[0] if isinstance(row[0], dict) else json.loads(row[0])
+        return {}
+
+
+def db_get_erp_recent_activities(limit=10):
+    # """
+    # Fetches the recent cross-module workflow actions (Audit Trail).
+    # """
+    with connection.cursor() as cur:
+        cur.execute("SELECT * FROM fnGetERPRecentActivities(%s)", [limit])
+        return _fetchall(cur)
+    
+
+

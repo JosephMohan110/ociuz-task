@@ -1934,8 +1934,11 @@
 -- -- MODULE 8: LEAVE REQUEST ERP MODULE
 -- -- ==========================================
 
--- -- 1. Create the Leave Request Table
--- CREATE TABLE IF NOT EXISTS tblLeaveRequests (
+-- -- 0. CLEAN SLATE: Safely drop the table and any dependent elements (like views or triggers) if they exist
+-- DROP TABLE IF EXISTS tblLeaveRequests CASCADE;
+
+-- -- 1. Create the Leave Request Table fresh
+-- CREATE TABLE tblLeaveRequests (
 --     id SERIAL PRIMARY KEY,
 --     document_number VARCHAR(50) UNIQUE NOT NULL,
 --     employee_name VARCHAR(100) NOT NULL,
@@ -1958,17 +1961,43 @@
 --     TargetPrimaryKey = 'id' 
 -- WHERE DocumentCode = 'LEAVE_REQ';
 
--- 3. Attach the Universal Audit Trigger
--- This guarantees EVERY edit/delete is captured in tblDocumentHistory automatically.
+-- -- 3. Attach the Universal Audit Trigger
+-- -- This guarantees EVERY edit/delete is captured in tblDocumentHistory automatically.
 -- DROP TRIGGER IF EXISTS trg_audit_leaves ON tblLeaveRequests;
 -- CREATE TRIGGER trg_audit_leaves
 -- AFTER INSERT OR UPDATE OR DELETE ON tblLeaveRequests
 -- FOR EACH ROW EXECUTE FUNCTION spGenericAuditTrigger('LEAVE_REQ', 'id');
 
+-- -- 4. Register Workflow Configuration Engine Rules
+-- -- This fixes the 'API Error' / 'No Actions' frontend bug by matching actions to roles.
+-- DO $$ 
+-- BEGIN
+--     -- Allow the 'Manager' role to click 'Approve' on a 'PENDING' leave request
+--     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
+--     SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Approve', 'Manager'
+--     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
+--     WHERE d.DocumentCode = 'LEAVE_REQ' AND s1.StatusCode = 'PENDING' AND s2.StatusCode = 'APPROVED'
+--     ON CONFLICT DO NOTHING;
 
--- -- -- ==========================================
--- -- -- FUNCTION: Create Leave Request
--- -- -- ==========================================
+--     -- Allow the 'Manager' role to click 'Reject' on a 'PENDING' leave request
+--     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
+--     SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Reject', 'Manager'
+--     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
+--     WHERE d.DocumentCode = 'LEAVE_REQ' AND s1.StatusCode = 'PENDING' AND s2.StatusCode = 'REJECTED'
+--     ON CONFLICT DO NOTHING;
+
+--     -- Add fallback link rule for testing Manager or Employee role actions on DRAFT rows
+--     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
+--     SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Submit/Review', 'Manager'
+--     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
+--     WHERE d.DocumentCode = 'LEAVE_REQ' AND s1.StatusCode = 'DRAFT' AND s2.StatusCode = 'PENDING'
+--     ON CONFLICT DO NOTHING;
+-- END $$;
+
+
+-- -- ==========================================
+-- -- FUNCTION: Create Leave Request
+-- -- ==========================================
 -- DROP FUNCTION IF EXISTS fnCreateLeaveRequest(VARCHAR, VARCHAR, DATE, DATE, TEXT, VARCHAR);
 
 -- CREATE OR REPLACE FUNCTION fnCreateLeaveRequest(
@@ -1985,6 +2014,11 @@
 --     v_doc_number VARCHAR;
 --     v_initial_status VARCHAR;
 -- BEGIN
+--     -- 0. CRITICAL BUSINESS RULE VALIDATION
+--     IF p_start_date > p_end_date THEN
+--         RAISE EXCEPTION 'Database Validation Error: Start Date cannot be after End Date.';
+--     END IF;
+
 --     -- 1. Get the dynamic LEV-XXXXX number
 --     v_doc_number := spGenerateDocumentNumber('LEAVE_REQ');
 
@@ -2029,6 +2063,11 @@
 --     v_rows_affected INT;
 --     v_reset_status VARCHAR;
 -- BEGIN
+--     -- 0. CRITICAL BUSINESS RULE VALIDATION
+--     IF p_start_date IS NOT NULL AND p_end_date IS NOT NULL AND p_start_date > p_end_date THEN
+--         RAISE EXCEPTION 'Database Validation Error: Start Date cannot be after End Date.';
+--     END IF;
+
 --     -- Fetch the starting status so edits reset the workflow safely
 --     v_reset_status := fnGetInitialStatus();
 
@@ -2081,16 +2120,15 @@
 --     FROM tblLeaveRequests l
 --     LEFT JOIN LATERAL (
 --         SELECT PerformedBy, PerformedDate
---         FROM tblGenericApprovalHistory
---         WHERE DocumentCode = 'LEAVE_REQ' AND RecordId = l.id::VARCHAR AND NewStatusCode = l.status
---         ORDER BY HistoryId DESC LIMIT 1
+--             FROM tblGenericApprovalHistory
+--             WHERE DocumentCode = 'LEAVE_REQ' AND RecordId = l.id::VARCHAR AND NewStatusCode = l.status
+--             ORDER BY HistoryId DESC LIMIT 1
 --     ) h ON TRUE
 --     WHERE l.is_deleted = FALSE
 --       AND (p_search IS NULL OR l.employee_name ILIKE '%' || p_search || '%' OR l.document_number ILIKE '%' || p_search || '%')
 --     ORDER BY l.id DESC;
 -- END;
 -- $$ LANGUAGE plpgsql;
-
 
 
 
@@ -2429,12 +2467,12 @@
 
 
 
--- CAT BOT
+-- -- CAT BOT
 
--- # ======================================================
--- # FILE 3: PG local.session.sql
--- # Create table here
--- # ======================================================
+-- -- # ======================================================
+-- -- # FILE 3: PG local.session.sql
+-- -- # Create table here
+-- -- # ======================================================
 
 -- CREATE TABLE chatbot_user_details (
 --     id SERIAL PRIMARY KEY,
@@ -2446,6 +2484,6 @@
 --     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 -- );
 
-SELECT * FROM chatbot_user_details;
+-- SELECT * FROM chatbot_user_details;
 
 -- DELETE FROM chatbot_user_details;

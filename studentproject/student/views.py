@@ -14,6 +14,8 @@ import json
 from django.views.decorators.csrf import csrf_exempt
 from django.core.serializers.json import DjangoJSONEncoder
 import sys 
+from datetime import datetime
+
 
 from PIL import Image, UnidentifiedImageError
 
@@ -1169,13 +1171,34 @@ def update_student_view(request, student_id):
 
 
 # Add this alongside your other views
-
 @global_error_handler
 def leave_list(request):
-    """ View to display all leave requests """
+    """
+    View to display all active leave requests with structural buttons 
+    loaded directly from database transition states.
+    """
     search_keyword = request.GET.get('search', '').strip()
     leaves = db_get_leave_requests(search_keyword)
     
+    # Simulate current authenticated worker role context
+    user_role = 'Employee' 
+
+    # Dynamic button extraction loop safely wrapped in exception handling
+    for leave in leaves:
+        current_status = leave.get('status', 'DRAFT')
+        try:
+            # Query your database workflow engine for valid button mapping rules
+            leave['allowed_actions'] = db_get_available_actions(
+                doc_code='LEAVE_REQ',
+                current_status_code=current_status,
+                role_name=user_role
+            )
+        except Exception as e:
+            # If the database engine fails, log the exact error to terminal
+            print(f"CRITICAL: Workflow button generation crashed for {leave.get('document_number')}. Error: {e}")
+            leave['allowed_actions'] = None
+            leave['workflow_error'] = str(e)
+
     paginator = Paginator(leaves, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
     
@@ -1184,26 +1207,45 @@ def leave_list(request):
         'search_keyword': search_keyword
     })
 
+
+
+
 @global_error_handler
 def add_leave_request(request):
-    """ View to create a leave request """
+    """ View to create a leave request with rigorous timeline checks """
     if request.method == 'POST':
         emp_name = request.POST.get('employee_name', '').strip()
         l_type = request.POST.get('leave_type', '').strip()
         start = request.POST.get('start_date', '').strip()
         end = request.POST.get('end_date', '').strip()
         reason = request.POST.get('reason', '').strip()
-        user_name = 'Admin' # Replace with request.user.username
+        user_name = 'Admin'  # Replace with request.user.username in production
         
-        # Validations would go here...
+        # 1. Check for missing values
+        if not all([emp_name, l_type, start, end, reason]):
+            messages.error(request, "All fields are mandatory.")
+            return render(request, 'leave/add_leave.html')
 
+        try:
+            # 2. Parse string dates into Comparable Date Objects
+            start_date_obj = datetime.strptime(start, '%Y-%m-%d').date()
+            end_date_obj = datetime.strptime(end, '%Y-%m-%d').date()
+
+            # 3. CRITICAL: Validate timeline order logic
+            if start_date_obj > end_date_obj:
+                messages.error(request, "Invalid Duration: Start Date cannot be after End Date.")
+                return render(request, 'leave/add_leave.html')
+
+        except ValueError:
+            messages.error(request, "Invalid date format submitted.")
+            return render(request, 'leave/add_leave.html')
+
+        # 4. Save clean data safely to database layer
         db_create_leave_request(emp_name, l_type, start, end, reason, user_name)
-        messages.success(request, f"Leave request for {emp_name} submitted.")
+        messages.success(request, f"Leave request for {emp_name} submitted as DRAFT.")
         return redirect('leave_list')
         
     return render(request, 'leave/add_leave.html')
-
-
 
 
 

@@ -266,6 +266,18 @@ Now we can:
             random.random() > 0.6  # 40% chance to ask
         )
 
+    def is_course_question(self, text):
+        """Simple keyword-based detection for course-related queries."""
+        if not text:
+            return False
+        text = text.lower()
+        keywords = [
+            'course', 'courses', 'fee', 'fees', 'admission', 'enroll', 'enrol', 'duration',
+            'syllabus', 'curriculum', 'module', 'apply', 'intake', 'batch', 'certificate',
+            'program', 'degree', 'diploma', 'training'
+        ]
+        return any(k in text for k in keywords)
+
     def get_response(self, session_id, user_input):
         """Main chatbot logic - conversational and smart"""
         if session_id not in conversation_memory:
@@ -301,6 +313,17 @@ Now we can:
         faq_answer = self.faq_response(msg)
         user['last_question'] = msg
         user['last_faq_answer'] = faq_answer
+
+        # If this is a course-related question and we don't have the user's email,
+        # answer first, then ask only for email (user requested flow).
+        if self.is_course_question(msg) and not user['email']:
+            user['step'] = 'ask_email'
+            email_prompts = [
+                f"If you'd like more details or offers, may I have your email? You can type 'no' to skip.",
+                f"Would you like me to send course details to your email? If so, please share it or type 'no'.",
+                f"I can email you full course info and offers — shall I save your email? Type it now or 'no' to skip."
+            ]
+            return f"{faq_answer}\n\n{random.choice(email_prompts)}"
 
         # Natural conversation: Gradually collect info
         if self.should_ask_for_name(user):

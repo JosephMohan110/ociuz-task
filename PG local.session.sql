@@ -2389,36 +2389,63 @@
 
 
 
--- ==========================================
--- CORRECTED FUNCTION: Verify ERP Superuser
--- ==========================================
-DROP FUNCTION IF EXISTS fnVerifyERPSuperuser(VARCHAR, VARCHAR);
+-- -- ==========================================
+-- -- CORRECTED FUNCTION: Verify ERP Superuser
+-- -- ==========================================
+-- DROP FUNCTION IF EXISTS fnVerifyERPSuperuser(VARCHAR, VARCHAR);
 
-CREATE OR REPLACE FUNCTION fnVerifyERPSuperuser(
-    p_username VARCHAR,
-    p_password VARCHAR
-)
-RETURNS TABLE (
-    user_id INT,
-    user_name VARCHAR,
-    is_authenticated BOOLEAN
-) AS $$
-DECLARE
-    v_id INT;
-    v_hash TEXT;
-    v_active BOOLEAN;
-BEGIN
-    -- Look up the target profile using your actual column name: is_active
-    SELECT id, password_hash, is_active 
-    INTO v_id, v_hash, v_active
-    FROM tblERPSuperuser
-    WHERE username = p_username;
+-- CREATE OR REPLACE FUNCTION fnVerifyERPSuperuser(
+--     p_username VARCHAR,
+--     p_password VARCHAR
+-- )
+-- RETURNS TABLE (
+--     user_id INT,
+--     user_name VARCHAR,
+--     is_authenticated BOOLEAN
+-- ) AS $$
+-- DECLARE
+--     v_id INT;
+--     v_hash TEXT;
+--     v_active BOOLEAN;
+-- BEGIN
+--     -- Look up the target profile using your actual column name: is_active
+--     SELECT id, password_hash, is_active 
+--     INTO v_id, v_hash, v_active
+--     FROM tblERPSuperuser
+--     WHERE username = p_username;
 
-    -- Validate if the user exists, is active, and the password matches
-    IF FOUND AND v_active = TRUE AND v_hash = crypt(p_password, v_hash) THEN
-        RETURN QUERY SELECT v_id, CAST(p_username AS VARCHAR), TRUE;
-    ELSE
-        RETURN QUERY SELECT 0, CAST('' AS VARCHAR), FALSE;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
+--     -- Validate if the user exists, is active, and the password matches
+--     IF FOUND AND v_active = TRUE AND v_hash = crypt(p_password, v_hash) THEN
+--         RETURN QUERY SELECT v_id, CAST(p_username AS VARCHAR), TRUE;
+--     ELSE
+--         RETURN QUERY SELECT 0, CAST('' AS VARCHAR), FALSE;
+--     END IF;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+-- CAT BOT
+
+-- # ======================================================
+-- # FILE 3: PG local.session.sql
+-- # Create table here
+-- # ======================================================
+
+-- CREATE TABLE chatbot_user_details (
+--     id SERIAL PRIMARY KEY,
+--     session_id VARCHAR(200) UNIQUE,
+--     name VARCHAR(150),
+--     email VARCHAR(200),
+--     phone VARCHAR(20),
+--     status VARCHAR(50),
+--     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- );
+
+SELECT * FROM chatbot_user_details;
+
+-- DELETE FROM chatbot_user_details;

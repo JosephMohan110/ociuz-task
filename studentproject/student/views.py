@@ -13,7 +13,7 @@ from pathlib import Path
 import json
 from django.views.decorators.csrf import csrf_exempt
 from django.core.serializers.json import DjangoJSONEncoder
-
+import sys 
 
 from PIL import Image, UnidentifiedImageError
 
@@ -75,10 +75,8 @@ def global_error_handler(view_func):
         try:
             return view_func(request, *args, **kwargs)
         except Exception as e:
-            return render(request, 'student/error.html', {
-                'code': 500,
-                'message': str(e)
-            }, status=500)
+            print(f"An error occurred: {e}", file=sys.stderr)
+            return render(request, 'student/error.html', {'code': 500, 'message': str(e)})
     return wrapper
 
 
@@ -1396,12 +1394,15 @@ def api_v1_process_workflow(request):
 def erp_dashboard_view(request):
     """
     Renders the central ERP Dashboard UI.
-    Fetches aggregated metrics via a single optimized JSON query.
+    Verifies state status parameters using our custom session pipeline.
     """
-    # 1. Fetch the unified metrics object
+    # Protect Route: Verify the custom SQL session block exists
+    if not request.session.get('is_erp_superuser'):
+        messages.error(request, "Access Denied. Please log in first.")
+        return redirect('login')
+
+    # Fetch aggregated metrics via our highly optimized single JSON query
     metrics = db_get_erp_dashboard_metrics()
-    
-    # 2. Fetch the recent activities stream (limit to 10)
     recent_activities = db_get_erp_recent_activities(limit=10)
     
     return render(request, 'student/erp_dashboard.html', {
@@ -1411,6 +1412,7 @@ def erp_dashboard_view(request):
         'approvals_30d': metrics.get('approvals_30d', {}),
         'recent_activities': recent_activities
     })
+
 
 
 @csrf_exempt

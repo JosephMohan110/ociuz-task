@@ -30,7 +30,7 @@ urlpatterns = [
     # ==========================================
     # 3. LEAVE REQUEST MODULE (Added from Module 8 & 11)
     # ==========================================
-    path('leaves/', views.leave_list, name='add_leave'),
+    path('leaves/', views.leave_list, name='leave_list'),
     path('leaves/add/', views.add_leave_request, name='add_leave_request'),
 
     # ==========================================

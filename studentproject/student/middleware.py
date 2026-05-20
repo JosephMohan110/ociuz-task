@@ -1,8 +1,6 @@
-# from django.shortcuts import render     It loads HTML pages from template folder.
+from django.shortcuts import render     #It loads HTML pages from template folder.
 from django.db import DatabaseError
 from django.http import Http404
-
-from django.shortcuts import render
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,9 +14,8 @@ class GlobalExceptionMiddleware:
         return self.get_response(request)
 
     def process_exception(self, request, exception):
-        logger.error(str(exception))
-
-        return render(request, 'error.html', {
+        # FIX: Ensure 'student/' prefix is added here so Django can locate the file
+        return render(request, 'student/error.html', {
             'code': 500,
-            'message': 'Internal Server Error'
+            'message': str(exception)
         }, status=500)

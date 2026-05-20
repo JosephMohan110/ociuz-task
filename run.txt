@@ -24,3 +24,7 @@ python manage.py migrate
 
 
 http://127.0.0.1:8000/
+
+Username (leave blank to use 'lenovo'): admin
+Email address: admin@gmail.com
+Password: Admin@!234

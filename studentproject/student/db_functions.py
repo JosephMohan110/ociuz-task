@@ -559,3 +559,20 @@ def db_get_erp_recent_activities(limit=10):
     
 
 
+def db_verify_erp_superuser(username, password):
+    # """
+    # Executes raw SQL query on fnVerifyERPSuperuser to validate credentials.
+    # Returns a dict containing authorization data or None.
+    # """
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT user_id, user_name, is_authenticated FROM fnVerifyERPSuperuser(%s, %s)",
+            [username, password]
+        )
+        row = cur.fetchone()
+        if row and row[2]: # row[2] represents 'is_authenticated' boolean
+            return {
+                'id': row[0],
+                'username': row[1]
+            }
+        return None

@@ -326,18 +326,13 @@
     <div class="container">
         <div class="header">
             <h1>Student Management System</h1>
-            <!-- <div class="nav">
-                <a href="{% url 'student_list' %}" class="btn btn-outline">Home</a>
-                <a href="{% url 'add_student' %}" class="btn btn-primary">Add Student</a>
-                <a href="{% url 'global_approval_history' %}" class="btn btn-info">📋 Audit History</a>
-                <a href="{% url 'deleted_students_list' %}" class="btn btn-danger">🗑️ Trash (Deleted)</a>
-            </div> -->
+
             <div class="nav" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px;">
                 <!-- Standard ERP Modules -->
                 <a href="{% url 'erp_dashboard' %}" class="btn btn-primary">📊 Dashboard</a>
                 <a href="{% url 'student_list' %}" class="btn btn-outline">🎓 Admissions</a>
-                <a href="{% url 'add_leave' %}" class="btn btn-outline">✈️ Leaves</a>
-                <a href="{% url 'global_approval_history' %}" class="btn btn-outline">📋 Audit History</a>
+                <a href="{% url 'add_student' %}" class="btn btn-primary">Add Student</a>
+                <a href="{% url 'leave_list' %}" class="btn btn-outline">✈️ Leaves</a>                <a href="{% url 'global_approval_history' %}" class="btn btn-outline">📋 Audit History</a>
                 <a href="{% url 'deleted_students_list' %}" class="btn btn-danger">🗑️ Trash</a>
                 
                 <!-- User Controls & Config (Pushed to the right) -->

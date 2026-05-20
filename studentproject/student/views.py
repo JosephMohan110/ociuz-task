@@ -55,6 +55,8 @@ from .db_functions import (
     db_get_next_status,
     db_validate_workflow_transition,
     db_get_available_actions,
+    db_create_leave_request,
+    db_get_leave_requests,
 
 )
 
@@ -447,71 +449,119 @@ def restore_student(request, student_id):
 
 
 
+# @global_error_handler
+# def approve_student(request, student_id):
+#     student = db_get_student_by_id(student_id)
+#     if not student:
+#         messages.error(request, 'Student not found.')
+#         return redirect('student_list')
+
+#     page = request.GET.get('page', '').strip()
+
+#     if request.method == 'POST':
+#         remarks = request.POST.get('remarks', '').strip()
+#         page = request.POST.get('page', page).strip()
+        
+#         # 1. Call the new DB Procedure
+#         result = db_process_student_approval(student_id, 'APPROVE', 'Admin', remarks)
+        
+#         # 2. Handle the response dynamically based on Status Code
+#         if result['status_code'] == 200:
+#             messages.success(request, result['message'])
+#         elif result['status_code'] == 409:
+#             messages.info(request, result['message']) # Already approved
+#         else:
+#             messages.warning(request, result['message']) # 400 or 500 errors
+
+#         if page:
+#             return redirect(f'{reverse("student_list")}?page={page}')
+#         return redirect('student_list')
+
+#     return render(request, 'student/approve_student.html', {
+#         'student': student, 'remarks': '', 'page': page,
+#     })
+
+
+# @global_error_handler
+# def reject_student(request, student_id):
+#     student = db_get_student_by_id(student_id)
+#     if not student:
+#         messages.error(request, 'Student not found.')
+#         return redirect('student_list')
+
+#     page = request.GET.get('page', '').strip()
+
+#     if request.method == 'POST':
+#         remarks = request.POST.get('remarks', '').strip()
+#         page = request.POST.get('page', page).strip()
+        
+#         # 1. Call the new DB Procedure
+#         result = db_process_student_approval(student_id, 'REJECT', 'Admin', remarks)
+        
+#         # 2. Handle the response dynamically based on Status Code
+#         if result['status_code'] == 200:
+#             messages.success(request, result['message'])
+#         elif result['status_code'] == 409:
+#             messages.info(request, result['message']) # Already rejected
+#         else:
+#             messages.warning(request, result['message']) # 400 or 500 errors
+
+#         if page:
+#             return redirect(f'{reverse("student_list")}?page={page}')
+#         return redirect('student_list')
+
+#     return render(request, 'student/reject_student.html', {
+#         'student': student, 'remarks': '', 'page': page,
+#     })
+
+
+
+# Replace the old approve_student and reject_student functions with db_process_student_approval
+
 @global_error_handler
-def approve_student(request, student_id):
+def process_student_workflow(request, student_id):
+    # """
+    # Replaces approve_student and reject_student.
+    # Uses the Generic ERP Module 5 Engine to process ANY workflow action 
+    # (Submit, Approve, Reject, Cancel) defined in the database.
+    # """
+    if request.method != 'POST':
+        return redirect('student_list')
+
+    # Get details from the frontend form
+    action_name = request.POST.get('action_name').strip() # e.g., 'Approve', 'Reject'
+    remarks = request.POST.get('remarks', '').strip()
+    
+    # In a real app, this comes from authentication
+    user_role = 'Manager' 
+    username = 'Admin'
+
+    # Fetch the student to get their CURRENT status
     student = db_get_student_by_id(student_id)
     if not student:
         messages.error(request, 'Student not found.')
         return redirect('student_list')
 
-    page = request.GET.get('page', '').strip()
+    try:
+        # Call the Universal Engine (Module 5)
+        new_status_code = db_process_document_action(
+            doc_code='STUDENT_ADM',
+            record_id=student_id,
+            current_status=student['approval_status'], # Maps to s.status
+            action_name=action_name,
+            role_name=user_role,
+            performed_by=username,
+            remarks=remarks
+        )
+        messages.success(request, f'Student transitioned to {new_status_code} successfully.')
+    except Exception as e:
+        # DB will throw an exception if the Role isn't allowed to do this action!
+        messages.error(request, str(e))
 
-    if request.method == 'POST':
-        remarks = request.POST.get('remarks', '').strip()
-        page = request.POST.get('page', page).strip()
-        
-        # 1. Call the new DB Procedure
-        result = db_process_student_approval(student_id, 'APPROVE', 'Admin', remarks)
-        
-        # 2. Handle the response dynamically based on Status Code
-        if result['status_code'] == 200:
-            messages.success(request, result['message'])
-        elif result['status_code'] == 409:
-            messages.info(request, result['message']) # Already approved
-        else:
-            messages.warning(request, result['message']) # 400 or 500 errors
-
-        if page:
-            return redirect(f'{reverse("student_list")}?page={page}')
-        return redirect('student_list')
-
-    return render(request, 'student/approve_student.html', {
-        'student': student, 'remarks': '', 'page': page,
-    })
-
-
-@global_error_handler
-def reject_student(request, student_id):
-    student = db_get_student_by_id(student_id)
-    if not student:
-        messages.error(request, 'Student not found.')
-        return redirect('student_list')
-
-    page = request.GET.get('page', '').strip()
-
-    if request.method == 'POST':
-        remarks = request.POST.get('remarks', '').strip()
-        page = request.POST.get('page', page).strip()
-        
-        # 1. Call the new DB Procedure
-        result = db_process_student_approval(student_id, 'REJECT', 'Admin', remarks)
-        
-        # 2. Handle the response dynamically based on Status Code
-        if result['status_code'] == 200:
-            messages.success(request, result['message'])
-        elif result['status_code'] == 409:
-            messages.info(request, result['message']) # Already rejected
-        else:
-            messages.warning(request, result['message']) # 400 or 500 errors
-
-        if page:
-            return redirect(f'{reverse("student_list")}?page={page}')
-        return redirect('student_list')
-
-    return render(request, 'student/reject_student.html', {
-        'student': student, 'remarks': '', 'page': page,
-    })
-
+    page = request.POST.get('page', '')
+    if page:
+        return redirect(f'{reverse("student_list")}?page={page}')
+    return redirect('student_list')
 
 
 
@@ -893,10 +943,10 @@ def custom_400(request, exception):
 # db_get_all_documents, db_generate_document_number, db_check_approval_required
 
 def api_get_document_masters(request):
-    """
-    API Endpoint to fetch all dynamic ERP module configurations.
-    Allows the frontend to render generic navigation or forms without hardcoding module names.
-    """
+    # """
+    # API Endpoint to fetch all dynamic ERP module configurations.
+    # Allows the frontend to render generic navigation or forms without hardcoding module names.
+    # """
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -910,9 +960,9 @@ def api_get_document_masters(request):
         return JsonResponse({'error': 'Failed to fetch document masters', 'details': str(e)}, status=500)
 
 def api_test_generate_doc_number(request):
-    """
-    TEST API: Pass ?doc_code=STUDENT_ADM to see the dynamic numbering in action.
-    """
+    # """
+    # TEST API: Pass ?doc_code=STUDENT_ADM to see the dynamic numbering in action.
+    # """
     doc_code = request.GET.get('doc_code', '').strip()
     if not doc_code:
         return JsonResponse({'error': 'doc_code parameter is required'}, status=400)
@@ -942,11 +992,11 @@ def api_test_generate_doc_number(request):
 # db_get_all_statuses, db_get_initial_status, db_get_next_status
 
 def api_get_statuses(request):
-    """
-    API Endpoint to fetch all statuses. 
-    The frontend can use this to render colored badges dynamically:
-    <span style="background-color: {{ status.color_code }}">{{ status.status_name }}</span>
-    """
+    # """
+    # API Endpoint to fetch all statuses. 
+    # The frontend can use this to render colored badges dynamically:
+    # <span style="background-color: {{ status.color_code }}">{{ status.status_name }}</span>
+    # """
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -960,9 +1010,9 @@ def api_get_statuses(request):
         return JsonResponse({'error': 'Failed to fetch statuses', 'details': str(e)}, status=500)
 
 def api_test_workflow_transition(request):
-    """
-    TEST API: Pass ?current_status=DRAFT to see what the database determines is next.
-    """
+    # """
+    # TEST API: Pass ?current_status=DRAFT to see what the database determines is next.
+    # """
     current_status = request.GET.get('current_status', '').strip().upper()
     if not current_status:
         return JsonResponse({'error': 'current_status parameter is required'}, status=400)
@@ -986,10 +1036,10 @@ def api_test_workflow_transition(request):
 # db_get_available_actions, db_validate_workflow_transition
 
 def api_get_workflow_actions(request):
-    """
-    API: Used by the frontend to dynamically render action buttons.
-    Example GET: ?doc_code=LEAVE_REQ&status=PENDING&role=Manager
-    """
+    # """
+    # API: Used by the frontend to dynamically render action buttons.
+    # Example GET: ?doc_code=LEAVE_REQ&status=PENDING&role=Manager
+    # """
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -1010,10 +1060,10 @@ def api_get_workflow_actions(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 def api_process_workflow_action(request):
-    """
-    API: Executes the workflow transition dynamically.
-    Instead of hardcoding status changes, this asks the DB what the next status is.
-    """
+    # """
+    # API: Executes the workflow transition dynamically.
+    # Instead of hardcoding status changes, this asks the DB what the next status is.
+    # """
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -1042,54 +1092,24 @@ def api_process_workflow_action(request):
     except Exception as e:
         # Catch the PostgreSQL Exception thrown by fnProcessWorkflowAction
         return JsonResponse({'error': str(e)}, status=400)
-    
-
-
-
-
-
-
-
-def your_create_view(request):
-    if request.method == 'POST':
-        # 1. First, ask the ERP engine for the next unique number
-        try:
-            # Pass the dynamic code we created in Module 1
-            document_number = db_generate_document_number('STUDENT_ADM') 
-            
-            # -> Yields: "ADM-00001"
-            
-            # 2. Now, save your student/leave request with this official document_number
-            # db_add_student(document_number, name, phone, email, course...)
-            
-            messages.success(request, f'Document {document_number} generated successfully.')
-            
-        except Exception as e:
-            messages.error(request, f'Failed to generate number: {str(e)}')
-            
-        return redirect('some_list_view')
-
-
 
 
 
 
 
 def handle_document_approval(request, module_code, record_id):
-    """
-    A single, generic view that handles approvals for ANY module.
-    """
+    # """
+    # A single, generic view that handles approvals for ANY module.
+    # """
     if request.method == 'POST':
-        action_name = request.POST.get('action_name') # e.g., 'Approve', 'Reject'
+        action_name = request.POST.get('action_name')
         remarks = request.POST.get('remarks', '')
-        
-        # In a real app, grab these from the DB and the User Session
-        current_status = request.POST.get('current_status') # e.g., 'PENDING'
-        user_role = 'Manager' # request.user.role
-        username = 'AdminUser' # request.user.username
+        current_status = request.POST.get('current_status')
+        user_role = 'Manager' # In production: request.user.role
+        username = 'AdminUser' # In production: request.user.username
 
         try:
-            # 1. Ask the Universal Engine to process the workflow
+            # 1. Ask the Universal Engine to process the workflow AND update the state
             new_status_code = db_process_document_action(
                 doc_code=module_code,
                 record_id=record_id,
@@ -1100,26 +1120,13 @@ def handle_document_approval(request, module_code, record_id):
                 remarks=remarks
             )
             
-            # 2. Update the specific table state based on the engine's result
-            if module_code == 'STUDENT_ADM':
-                # Update student table
-                # db_update_student_status(record_id, new_status_code)
-                pass
-            elif module_code == 'LEAVE_REQ':
-                # Update leave table
-                # db_update_leave_status(record_id, new_status_code)
-                pass
-
+            # Look how clean this is! No if/elif for modules.
             messages.success(request, f'Document transitioned to {new_status_code} successfully.')
             
         except Exception as e:
-            # This catches the PostgreSQL 'Workflow Security Violation' exceptions
             messages.error(request, str(e))
 
         return redirect(request.META.get('HTTP_REFERER', '/'))
-    
-
-
 
 
 
@@ -1158,3 +1165,50 @@ def update_student_view(request, student_id):
 
 
 
+# Add this alongside your other views
+
+@global_error_handler
+def leave_list(request):
+    """ View to display all leave requests """
+    search_keyword = request.GET.get('search', '').strip()
+    leaves = db_get_leave_requests(search_keyword)
+    
+    paginator = Paginator(leaves, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    
+    return render(request, 'leave/leave_list.html', {
+        'leaves': page_obj,
+        'search_keyword': search_keyword
+    })
+
+@global_error_handler
+def add_leave_request(request):
+    """ View to create a leave request """
+    if request.method == 'POST':
+        emp_name = request.POST.get('employee_name', '').strip()
+        l_type = request.POST.get('leave_type', '').strip()
+        start = request.POST.get('start_date', '').strip()
+        end = request.POST.get('end_date', '').strip()
+        reason = request.POST.get('reason', '').strip()
+        user_name = 'Admin' # Replace with request.user.username
+        
+        # Validations would go here...
+
+        db_create_leave_request(emp_name, l_type, start, end, reason, user_name)
+        messages.success(request, f"Leave request for {emp_name} submitted.")
+        return redirect('leave_list')
+        
+    return render(request, 'leave/add_leave.html')
+
+# ==========================================
+# 🚀 THE MAGIC: Reusing the Generic Engine
+# ==========================================
+# To approve, reject, or submit this leave request, your HTML just points to 
+# the EXACT SAME view we updated in Module 5, passing 'LEAVE_REQ' as the module code:
+
+# Example HTML Button in your template:
+# <form action="{% url 'handle_document_approval' module_code='LEAVE_REQ' record_id=leave.id %}" method="POST">
+#     <input type="hidden" name="action_name" value="Approve">
+#     <input type="hidden" name="current_status" value="{{ leave.status }}">
+#     <button type="submit">Approve Leave</button>
+# </form>

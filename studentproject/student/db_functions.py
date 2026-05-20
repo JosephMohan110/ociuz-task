@@ -71,11 +71,6 @@ def db_email_exists(email, exclude_id=None):
 # CREATE
 
 def db_add_student(name, phone, email, course_id, student_image_path=None):
-    # """
-    # INSERT a new student and an initial 'Pending' approval record.
-    # Both writes happen inside one atomic transaction.
-    # Returns the new student id.
-    # """
     with transaction.atomic():
         with connection.cursor() as cur:
             cur.execute(
@@ -83,6 +78,7 @@ def db_add_student(name, phone, email, course_id, student_image_path=None):
                 [name, phone, email, course_id, student_image_path]
             )
             return cur.fetchone()[0]
+        
 
 
 # UPDATE
@@ -251,37 +247,33 @@ def db_get_global_approval_history(search='', action='', date_from='', date_to='
 # ==========================================
 
 def db_get_all_documents():
-    """
-    Fetch all active ERP Document Configurations dynamically.
-    Returns a list of dicts.
-    """
+    # """
+    # Fetch all active ERP Document Configurations dynamically.
+    # Returns a list of dicts.
+    # """
     with connection.cursor() as cur:
         cur.execute("SELECT * FROM fnGetDocumentMasters()")
         return _fetchall(cur)
 
 def db_generate_document_number(document_code):
-    """
-    Dynamically generates the next sequence number for a module (e.g., ADM-0001).
-    Runs inside a transaction to ensure database row-locking works correctly.
-    """
+    # """
+    # Dynamically generates the next sequence number for a module (e.g., ADM-0001).
+    # Runs inside a transaction to ensure database row-locking works correctly.
+    # """
     with transaction.atomic():
         with connection.cursor() as cur:
             cur.execute("SELECT fnGenerateNextDocumentNumber(%s)", [document_code])
             return cur.fetchone()[0]
 
 def db_check_approval_required(document_code):
-    """
-    Dynamically checks if a specific module requires workflow approval.
-    Useful for bypassing approval statuses if a document is set to auto-approve.
-    """
+    # """
+    # Dynamically checks if a specific module requires workflow approval.
+    # Calls the database function to avoid raw table queries in Python.
+    # """
     with connection.cursor() as cur:
-        cur.execute(
-            "SELECT ApprovalRequired FROM tblDocumentMaster WHERE DocumentCode = %s AND IsActive = TRUE",
-            [document_code]
-        )
+        cur.execute("SELECT fnCheckApprovalRequired(%s)", [document_code])
         row = cur.fetchone()
-        return row[0] if row else True # Default to True for safety if not found
-    
+        return row[0] if row else True
 
 
 
@@ -290,28 +282,31 @@ def db_check_approval_required(document_code):
 # ==========================================
 
 def db_get_all_statuses():
-    """
-    Fetch all active workflow statuses.
-    Used by frontend to build dynamic dropdowns or filter tabs.
-    """
+    # """
+    # Fetch all active workflow statuses.
+    # Used by frontend to build dynamic dropdowns or filter tabs.
+    # """
     with connection.cursor() as cur:
         cur.execute("SELECT * FROM fnGetAllStatuses()")
         return _fetchall(cur)
 
+
 def db_get_initial_status():
-    """
-    Returns the starting status code for any newly created record (e.g., 'DRAFT').
-    """
+    # """
+    # Returns the starting status code for any newly created record.
+    # Hardcoded string removed; the DB function determines the lowest sequence.
+    # """
     with connection.cursor() as cur:
         cur.execute("SELECT fnGetInitialStatus()")
         row = cur.fetchone()
-        return row[0] if row else 'DRAFT'
+        return row[0] if row else None
+
 
 def db_get_next_status(current_status_code):
-    """
-    Queries the dynamic workflow engine to find the next sequential status.
-    Eliminates hardcoded `if status == 'Pending' -> 'Approved'` logic.
-    """
+    # """
+    # Queries the dynamic workflow engine to find the next sequential status.
+    # Eliminates hardcoded `if status == 'Pending' -> 'Approved'` logic.
+    # """
     with connection.cursor() as cur:
         cur.execute("SELECT fnGetNextWorkflowStatus(%s)", [current_status_code])
         row = cur.fetchone()
@@ -326,10 +321,10 @@ def db_get_next_status(current_status_code):
 # ==========================================
 
 def db_get_available_actions(doc_code, current_status_code, role_name):
-    """
-    Returns a list of valid actions (buttons) a user can perform.
-    Each dict contains: action_name, next_status_code, color_code.
-    """
+    # """
+    # Returns a list of valid actions (buttons) a user can perform.
+    # Each dict contains: action_name, next_status_code, color_code.
+    # """
     with connection.cursor() as cur:
         cur.execute(
             "SELECT * FROM fnGetAvailableActions(%s, %s, %s)",
@@ -338,10 +333,10 @@ def db_get_available_actions(doc_code, current_status_code, role_name):
         return _fetchall(cur)
 
 def db_validate_workflow_transition(doc_code, current_status_code, action_name, role_name):
-    """
-    Validates if an action is allowed and returns the new status code.
-    Throws a database error if the transition is illegal.
-    """
+    # """
+    # Validates if an action is allowed and returns the new status code.
+    # Throws a database error if the transition is illegal.
+    # """
     with connection.cursor() as cur:
         cur.execute(
             "SELECT fnProcessWorkflowAction(%s, %s, %s, %s)",
@@ -359,11 +354,11 @@ def db_validate_workflow_transition(doc_code, current_status_code, action_name, 
 # ==========================================
 
 def db_generate_document_number(document_code):
-    """
-    Calls spGenerateDocumentNumber to safely generate a unique, sequential ID.
-    CRITICAL: This MUST be wrapped in transaction.atomic(). 
-    The 'FOR UPDATE' lock in Postgres only releases when the Django transaction commits.
-    """
+    # """
+    # Calls spGenerateDocumentNumber to safely generate a unique, sequential ID.
+    # CRITICAL: This MUST be wrapped in transaction.atomic(). 
+    # The 'FOR UPDATE' lock in Postgres only releases when the Django transaction commits.
+    # """
     with transaction.atomic():
         with connection.cursor() as cur:
             cur.execute("SELECT spGenerateDocumentNumber(%s)", [document_code])
@@ -381,11 +376,11 @@ def db_generate_document_number(document_code):
 # ==========================================
 
 def db_process_document_action(doc_code, record_id, current_status, action_name, role_name, performed_by, remarks=''):
-    """
-    The universal function for transitioning ANY document in the ERP.
-    Returns the 'new_status_code' if successful.
-    Raises an Exception if the workflow rules forbid the action.
-    """
+    # """
+    # The universal function for transitioning ANY document in the ERP.
+    # Returns the 'new_status_code' if successful.
+    # Raises an Exception if the workflow rules forbid the action.
+    # """
     with transaction.atomic():  # Wrapped in atomic to ensure the history insert is tied to the parent update
         with connection.cursor() as cur:
             try:
@@ -411,7 +406,7 @@ def db_process_document_action(doc_code, record_id, current_status, action_name,
 # ==========================================
 
 def get_client_ip(request):
-    """Utility to extract the user's IP Address from the Django request"""
+    # """Utility to extract the user's IP Address from the Django request"""
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
@@ -419,29 +414,64 @@ def get_client_ip(request):
         ip = request.META.get('REMOTE_ADDR')
     return ip
 
+
+
 def db_set_audit_context(cursor, user_name, ip_address):
-    """
-    Passes the Django User and IP to PostgreSQL for the trigger to use.
-    This bridges the gap between Web Requests and Database Triggers.
-    """
+    # """
+    # Passes the Django User and IP to PostgreSQL for the trigger to use.
+    # This bridges the gap between Web Requests and Database Triggers.
+    # """
     cursor.execute("SET LOCAL erp.current_user = %s", [user_name])
     cursor.execute("SET LOCAL erp.current_ip = %s", [ip_address])
 
+
+
 def db_get_document_history(document_code, record_id):
-    """
-    Fetches the complete lifecycle audit trail of any specific record.
-    """
+    # """
+    # Fetches the complete lifecycle audit trail of any specific record.
+    # Delegates the query to PostgreSQL to maintain pure ERP architecture.
+    # """
     with connection.cursor() as cur:
-        cur.execute("""
-            SELECT h.HistoryId, h.Action, h.OldStatus, h.NewStatus, 
-                   h.Remarks, h.ActionBy, h.ActionDate, h.IPAddress,
-                   h.OldData, h.NewData
-            FROM tblDocumentHistory h
-            JOIN tblDocumentMaster d ON h.DocumentId = d.DocumentId
-            WHERE d.DocumentCode = %s AND h.RecordId = %s
-            ORDER BY h.HistoryId DESC
-        """, [document_code, str(record_id)])
+        cur.execute("SELECT * FROM fnGetDocumentHistory(%s, %s)", [document_code, str(record_id)])
         return _fetchall(cur)
 
 
 
+
+
+# ==========================================
+# MODULE 8: LEAVE REQUEST MODULE
+# ==========================================
+
+def db_create_leave_request(employee_name, leave_type, start_date, end_date, reason, created_by='System'):
+    # """
+    # Creates a new leave request. Document numbering and initial status 
+    # are handled entirely by PostgreSQL dynamically.
+    # """
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT fnCreateLeaveRequest(%s, %s, %s, %s, %s, %s)",
+                [employee_name, leave_type, start_date, end_date, reason, created_by]
+            )
+            return cur.fetchone()[0]
+
+def db_edit_leave_request(leave_id, employee_name, leave_type, start_date, end_date, reason, edited_by='System'):
+    # """
+    # Edits a leave request. Resets the workflow status automatically via DB logic.
+    # """
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT fnEditLeaveRequest(%s, %s, %s, %s, %s, %s, %s)",
+                [leave_id, employee_name, leave_type, start_date, end_date, reason, edited_by]
+            )
+            return cur.fetchone()[0]
+
+def db_get_leave_requests(search_keyword=''):
+    # """
+    # Fetches all active leave requests with their dynamic history tracking.
+    # """
+    with connection.cursor() as cur:
+        cur.execute("SELECT * FROM fnGetLeaveRequests(%s)", [search_keyword or None])
+        return _fetchall(cur)

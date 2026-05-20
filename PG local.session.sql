@@ -458,9 +458,9 @@
 -- END;
 -- $$ LANGUAGE plpgsql;
 
--- ==========================================
--- VIEW TABLE DATA (Uncomment to use)
--- ==========================================
+-- -- ==========================================
+-- -- VIEW TABLE DATA (Uncomment to use)
+-- -- ==========================================
 
 -- SELECT * FROM students;
 -- SELECT * FROM tblCourse;
@@ -1202,6 +1202,27 @@
 
 
 
+-- -- ==========================================
+-- -- MODULE 1:  FUNCTION (Removes raw query from Python)
+-- -- ==========================================
+-- DROP FUNCTION IF EXISTS fnCheckApprovalRequired(VARCHAR);
+
+-- CREATE OR REPLACE FUNCTION fnCheckApprovalRequired(p_document_code VARCHAR)
+-- RETURNS BOOLEAN AS $$
+-- DECLARE
+--     v_is_required BOOLEAN;
+-- BEGIN
+--     SELECT ApprovalRequired INTO v_is_required
+--     FROM tblDocumentMaster 
+--     WHERE DocumentCode = p_document_code AND IsActive = TRUE;
+    
+--     -- Default to TRUE for safety if the document code is not found
+--     RETURN COALESCE(v_is_required, TRUE);
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
 
 -- ==========================================
 -- MODULE 2: ERP STATUS MANAGEMENT MASTER
@@ -1424,52 +1445,647 @@
 
 
 
--- ==========================================
--- MODULE 4: DYNAMIC DOCUMENT NUMBER GENERATION
--- ==========================================
+-- -- ==========================================
+-- -- MODULE 4: DYNAMIC DOCUMENT NUMBER GENERATION
+-- -- ==========================================
 
-DROP FUNCTION IF EXISTS spGenerateDocumentNumber(VARCHAR);
+-- DROP FUNCTION IF EXISTS spGenerateDocumentNumber(VARCHAR);
 
--- NOTE: We use a FUNCTION returning VARCHAR so Django can easily call it via SELECT.
--- The 'sp' prefix denotes a Stored Procedure-like behavior.
-CREATE OR REPLACE FUNCTION spGenerateDocumentNumber(
-    p_document_code VARCHAR
-)
-RETURNS VARCHAR AS $$
-DECLARE
-    v_prefix VARCHAR;
-    v_current_number INT;
-    v_new_number INT;
-    v_generated_number VARCHAR;
-BEGIN
-    -- 1. ROW-LEVEL LOCKING (The Concurrency Secret)
-    -- 'FOR UPDATE' locks this specific document's row. 
-    -- If two users click 'Submit' at the exact same time, the second user 
-    -- is forced to wait until the first user's transaction finishes.
-    SELECT Prefix, RunningNumber 
-    INTO v_prefix, v_current_number
-    FROM tblDocumentMaster
-    WHERE DocumentCode = p_document_code AND IsActive = TRUE
-    FOR UPDATE;
+-- -- NOTE: We use a FUNCTION returning VARCHAR so Django can easily call it via SELECT.
+-- -- The 'sp' prefix denotes a Stored Procedure-like behavior.
+-- CREATE OR REPLACE FUNCTION spGenerateDocumentNumber(
+--     p_document_code VARCHAR
+-- )
+-- RETURNS VARCHAR AS $$
+-- DECLARE
+--     v_prefix VARCHAR;
+--     v_current_number INT;
+--     v_new_number INT;
+--     v_generated_number VARCHAR;
+-- BEGIN
+--     -- 1. ROW-LEVEL LOCKING (The Concurrency Secret)
+--     -- 'FOR UPDATE' locks this specific document's row. 
+--     -- If two users click 'Submit' at the exact same time, the second user 
+--     -- is forced to wait until the first user's transaction finishes.
+--     SELECT Prefix, RunningNumber 
+--     INTO v_prefix, v_current_number
+--     FROM tblDocumentMaster
+--     WHERE DocumentCode = p_document_code AND IsActive = TRUE
+--     FOR UPDATE;
 
-    -- 2. Validate if the document type exists
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'ERP Configuration Error: Document Code "%" not found or is inactive.', p_document_code;
-    END IF;
+--     -- 2. Validate if the document type exists
+--     IF NOT FOUND THEN
+--         RAISE EXCEPTION 'ERP Configuration Error: Document Code "%" not found or is inactive.', p_document_code;
+--     END IF;
 
-    -- 3. Increment the running number
-    v_new_number := COALESCE(v_current_number, 0) + 1;
+--     -- 3. Increment the running number
+--     v_new_number := COALESCE(v_current_number, 0) + 1;
 
-    -- 4. Update the master table to save the new running number
-    UPDATE tblDocumentMaster
-    SET RunningNumber = v_new_number,
-        UpdatedDate = NOW()
-    WHERE DocumentCode = p_document_code;
+--     -- 4. Update the master table to save the new running number
+--     UPDATE tblDocumentMaster
+--     SET RunningNumber = v_new_number,
+--         UpdatedDate = NOW()
+--     WHERE DocumentCode = p_document_code;
 
-    -- 5. Format the new document number with 5 digits (e.g., ADM-00001, LEV-00042)
-    v_generated_number := v_prefix || '-' || LPAD(v_new_number::TEXT, 5, '0');
+--     -- 5. Format the new document number with 5 digits (e.g., ADM-00001, LEV-00042)
+--     v_generated_number := v_prefix || '-' || LPAD(v_new_number::TEXT, 5, '0');
 
-    -- 6. Return the fully formatted string
-    RETURN v_generated_number;
-END;
-$$ LANGUAGE plpgsql;
+--     -- 6. Return the fully formatted string
+--     RETURN v_generated_number;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+-- -- ==========================================
+-- -- MODULE 5: GENERIC APPROVAL ENGINE
+-- -- ==========================================
+
+-- -- 1. Create a Centralized Audit & History Table for ALL Modules
+-- CREATE TABLE IF NOT EXISTS tblGenericApprovalHistory (
+--     HistoryId SERIAL PRIMARY KEY,
+--     DocumentCode VARCHAR(50) NOT NULL,  -- e.g., 'STUDENT_ADM', 'LEAVE_REQ'
+--     RecordId VARCHAR(50) NOT NULL,      -- The ID of the record in the specific table
+--     ActionName VARCHAR(50) NOT NULL,    -- 'Approve', 'Reject', 'Submit'
+--     OldStatusCode VARCHAR(50) NOT NULL, -- 'PENDING'
+--     NewStatusCode VARCHAR(50) NOT NULL, -- 'APPROVED'
+--     Remarks TEXT,
+--     PerformedBy VARCHAR(100) NOT NULL,  -- User ID or Username
+--     PerformedDate TIMESTAMP DEFAULT NOW()
+-- );
+
+
+
+
+-- -- 2. The Universal Processing Procedure
+-- DROP FUNCTION IF EXISTS spProcessDocumentAction(VARCHAR, VARCHAR, VARCHAR, VARCHAR, VARCHAR, VARCHAR, TEXT);
+
+-- CREATE OR REPLACE FUNCTION spProcessDocumentAction(
+--     p_DocumentCode VARCHAR,
+--     p_RecordId VARCHAR,
+--     p_CurrentStatusCode VARCHAR,
+--     p_ActionName VARCHAR,
+--     p_RoleName VARCHAR,
+--     p_PerformedBy VARCHAR,
+--     p_Remarks TEXT
+-- )
+-- RETURNS VARCHAR AS $$
+-- DECLARE
+--     v_NextStatusCode VARCHAR;
+--     v_RecentAction VARCHAR;
+--     v_TargetTable VARCHAR;
+--     v_TargetStatusCol VARCHAR;
+--     v_TargetPkCol VARCHAR;
+--     v_DynamicSQL TEXT;
+-- BEGIN
+--     -- 1. VALIDATE WORKFLOW TRANSITION & FETCH TARGET TABLE METADATA
+--     SELECT ns.StatusCode, d.TargetTableName, d.TargetStatusColumn, d.TargetPrimaryKey
+--     INTO v_NextStatusCode, v_TargetTable, v_TargetStatusCol, v_TargetPkCol
+--     FROM tblDocumentWorkflow w
+--     JOIN tblDocumentMaster d ON w.DocumentId = d.DocumentId
+--     JOIN tblDocumentStatusMaster cs ON w.CurrentStatusId = cs.StatusId
+--     JOIN tblDocumentStatusMaster ns ON w.NextStatusId = ns.StatusId
+--     WHERE d.DocumentCode = p_DocumentCode 
+--       AND cs.StatusCode = p_CurrentStatusCode
+--       AND w.ActionName = p_ActionName
+--       AND w.RoleName = p_RoleName
+--       AND w.IsActive = TRUE;
+
+--     -- 2. PREVENT INVALID ACTIONS
+--     IF NOT FOUND THEN
+--         RAISE EXCEPTION 'Workflow Security Violation: Action "%" is not permitted for Role "%" on Document "%" in Status "%".', 
+--             p_ActionName, p_RoleName, p_DocumentCode, p_CurrentStatusCode;
+--     END IF;
+
+--     -- 3. PREVENT DUPLICATE APPROVALS (Concurrency Check)
+--     SELECT ActionName INTO v_RecentAction
+--     FROM tblGenericApprovalHistory
+--     WHERE DocumentCode = p_DocumentCode 
+--       AND RecordId = p_RecordId 
+--       AND NewStatusCode = v_NextStatusCode
+--       AND PerformedDate >= NOW() - INTERVAL '2 seconds';
+
+--     IF FOUND THEN
+--         RAISE EXCEPTION 'Duplicate Action Error: This document was just processed.';
+--     END IF;
+
+--     -- 4. STORE ACTION HISTORY
+--     INSERT INTO tblGenericApprovalHistory (
+--         DocumentCode, RecordId, ActionName, OldStatusCode, NewStatusCode, Remarks, PerformedBy
+--     ) VALUES (
+--         p_DocumentCode, p_RecordId, p_ActionName, p_CurrentStatusCode, v_NextStatusCode, p_Remarks, p_PerformedBy
+--     );
+
+--     -- 5. DYNAMICALLY UPDATE THE PARENT TABLE (NO HARDCODING!)
+--     -- The DB builds a string like: UPDATE students SET status = 'APPROVED' WHERE id = 1
+--     IF v_TargetTable IS NOT NULL THEN
+--         v_DynamicSQL := format('UPDATE %I SET %I = %L, updated_date = NOW() WHERE %I = %s', 
+--                                v_TargetTable, v_TargetStatusCol, v_NextStatusCode, v_TargetPkCol, p_RecordId);
+--         EXECUTE v_DynamicSQL;
+--     END IF;
+
+--     RETURN v_NextStatusCode;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+-- -- Add Target Metadata Columns to Document Master
+-- ALTER TABLE tblDocumentMaster
+-- ADD COLUMN IF NOT EXISTS TargetTableName VARCHAR(50),
+-- ADD COLUMN IF NOT EXISTS TargetStatusColumn VARCHAR(50) DEFAULT 'status',
+-- ADD COLUMN IF NOT EXISTS TargetPrimaryKey VARCHAR(50) DEFAULT 'id';
+
+-- -- Update the existing seed data so the DB knows where 'STUDENT_ADM' lives
+-- UPDATE tblDocumentMaster 
+-- SET TargetTableName = 'students', 
+--     TargetStatusColumn = 'status', 
+--     TargetPrimaryKey = 'id' 
+-- WHERE DocumentCode = 'STUDENT_ADM';
+
+
+
+
+-- -- ==========================================
+-- -- MODULE 6: ERP AUDIT & HISTORY TRACKING
+-- -- ==========================================
+
+-- -- 1. Create the Centralized Audit Trail Table
+-- CREATE TABLE IF NOT EXISTS tblDocumentHistory (
+--     HistoryId SERIAL PRIMARY KEY,
+--     DocumentId INT REFERENCES tblDocumentMaster(DocumentId),
+--     RecordId VARCHAR(50) NOT NULL,
+--     OldStatus VARCHAR(50),       -- For workflow transitions
+--     NewStatus VARCHAR(50),       -- For workflow transitions
+--     Action VARCHAR(50) NOT NULL, -- e.g., 'INSERT', 'UPDATE', 'DELETE', 'APPROVE'
+--     Remarks TEXT,
+--     OldData JSONB,               -- Captures the EXACT state of the row BEFORE edit
+--     NewData JSONB,               -- Captures the EXACT state of the row AFTER edit
+--     ActionBy VARCHAR(100) DEFAULT 'System',
+--     ActionDate TIMESTAMP DEFAULT NOW(),
+--     IPAddress VARCHAR(45)        -- Supports IPv4 and IPv6
+-- );
+
+-- -- 2. CREATE UNIVERSAL AUDIT TRIGGER FUNCTION
+-- -- This single function can be attached to ANY table in the ERP.
+-- -- It dynamically reads the table structure using row_to_json().
+-- DROP FUNCTION IF EXISTS spGenericAuditTrigger() CASCADE;
+-- CREATE OR REPLACE FUNCTION spGenericAuditTrigger()
+-- RETURNS TRIGGER AS $$
+-- DECLARE
+--     -- The trigger expects two arguments: [1] DocumentCode, [2] Primary Key Column Name
+--     v_DocCode VARCHAR := TG_ARGV[0];
+--     v_PkColumn VARCHAR := TG_ARGV[1];
+--     v_DocId INT;
+--     v_RecordId VARCHAR;
+--     v_OldData JSONB := NULL;
+--     v_NewData JSONB := NULL;
+--     v_ActionBy VARCHAR := 'System';
+--     v_IPAddress VARCHAR := 'Unknown';
+-- BEGIN
+--     -- Look up the official DocumentId
+--     SELECT DocumentId INTO v_DocId FROM tblDocumentMaster WHERE DocumentCode = v_DocCode;
+
+--     -- Extract Context Variables (Passed from Django via SET LOCAL)
+--     BEGIN
+--         v_ActionBy := current_setting('erp.current_user', true);
+--         v_IPAddress := current_setting('erp.current_ip', true);
+--     EXCEPTION WHEN OTHERS THEN
+--         -- Fallback if variables aren't set
+--         v_ActionBy := 'System';
+--     END;
+
+--     -- Dynamically capture Before/After state based on the Action
+--     IF TG_OP = 'INSERT' THEN
+--         v_NewData := row_to_json(NEW)::jsonb;
+--         v_RecordId := v_NewData->>v_PkColumn;
+--     ELSIF TG_OP = 'UPDATE' THEN
+--         v_OldData := row_to_json(OLD)::jsonb;
+--         v_NewData := row_to_json(NEW)::jsonb;
+--         v_RecordId := v_NewData->>v_PkColumn;
+--     ELSIF TG_OP = 'DELETE' THEN
+--         v_OldData := row_to_json(OLD)::jsonb;
+--         v_RecordId := v_OldData->>v_PkColumn;
+--     END IF;
+
+--     -- Insert the deep audit record
+--     INSERT INTO tblDocumentHistory (
+--         DocumentId, RecordId, Action, OldData, NewData, ActionBy, ActionDate, IPAddress
+--     ) VALUES (
+--         v_DocId, v_RecordId, TG_OP, v_OldData, v_NewData, COALESCE(v_ActionBy, 'System'), NOW(), v_IPAddress
+--     );
+
+--     IF TG_OP = 'DELETE' THEN
+--         RETURN OLD;
+--     END IF;
+--     RETURN NEW;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+-- -- 3. EXAMPLE: How to attach this to your Students table
+-- -- We pass the Module Code ('STUDENT_ADM') and the Primary Key column ('id')
+-- DROP TRIGGER IF EXISTS trg_audit_students ON students;
+-- CREATE TRIGGER trg_audit_students
+-- AFTER INSERT OR UPDATE OR DELETE ON students
+-- FOR EACH ROW EXECUTE FUNCTION spGenericAuditTrigger('STUDENT_ADM', 'id');
+
+
+
+
+-- -- ==========================================
+-- -- MODULE 6: Get Document History Function
+-- -- ==========================================
+-- DROP FUNCTION IF EXISTS fnGetDocumentHistory(VARCHAR, VARCHAR);
+
+-- CREATE OR REPLACE FUNCTION fnGetDocumentHistory(
+--     p_document_code VARCHAR,
+--     p_record_id VARCHAR
+-- )
+-- RETURNS TABLE (
+--     history_id INT,
+--     action VARCHAR,
+--     old_status VARCHAR,
+--     new_status VARCHAR,
+--     remarks TEXT,
+--     action_by VARCHAR,
+--     action_date TIMESTAMP,
+--     ip_address VARCHAR,
+--     old_data JSONB,
+--     new_data JSONB
+-- ) AS $$
+-- BEGIN
+--     RETURN QUERY
+--     SELECT 
+--         h.HistoryId, h.Action, h.OldStatus, h.NewStatus, 
+--         h.Remarks, h.ActionBy, h.ActionDate, h.IPAddress,
+--         h.OldData, h.NewData
+--     FROM tblDocumentHistory h
+--     JOIN tblDocumentMaster d ON h.DocumentId = d.DocumentId
+--     WHERE d.DocumentCode = p_document_code 
+--       AND h.RecordId = p_record_id
+--     ORDER BY h.HistoryId DESC;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+
+-- -- ==========================================
+-- -- MODULE 7: STUDENT ADMISSION ERP MODULE 
+-- -- ==========================================
+
+-- -- 1. Upgrade the Students Table for ERP Standards
+-- ALTER TABLE students 
+-- ADD COLUMN IF NOT EXISTS document_number VARCHAR(50) UNIQUE;
+
+-- -- We will use the existing 'status' column to store the dynamic 'StatusCode' (e.g., 'DRAFT', 'PENDING')
+-- -- Drop the old hardcoded default if it exists.
+-- ALTER TABLE students ALTER COLUMN status DROP DEFAULT;
+
+-- -- 2. Attach the Universal Audit Trigger (From Module 6) to the Students table
+-- -- This guarantees EVERY change to a student is forensically logged as a JSONB snapshot.
+
+-- DROP TRIGGER IF EXISTS trg_audit_students ON students;
+
+-- CREATE TRIGGER trg_audit_students
+-- AFTER INSERT OR UPDATE OR DELETE ON students
+-- FOR EACH ROW EXECUTE FUNCTION spGenericAuditTrigger('STUDENT_ADM', 'id');
+
+
+
+
+
+
+
+
+
+-- -- ==========================================
+-- -- MODULE 7 UPDATE 1: ERP-Native Add Student
+-- -- ==========================================
+-- DROP FUNCTION IF EXISTS fnAddStudent(VARCHAR, VARCHAR, VARCHAR, INT, VARCHAR);
+
+-- CREATE OR REPLACE FUNCTION fnAddStudent(
+--     p_name VARCHAR,
+--     p_phone VARCHAR,
+--     p_email VARCHAR,
+--     p_course_id INT,
+--     p_student_image VARCHAR DEFAULT NULL,
+--     p_created_by VARCHAR DEFAULT 'System'
+-- )
+-- RETURNS INT AS $$
+-- DECLARE
+--     v_new_student_id INT;
+--     v_doc_number VARCHAR;
+--     v_initial_status VARCHAR;
+-- BEGIN
+--     -- 1. DYNAMIC ERP NUMBER: Get the next available ADM-XXXXX number safely
+--     v_doc_number := spGenerateDocumentNumber('STUDENT_ADM');
+
+--     -- 2. DYNAMIC STATUS: Ask the system what the first status is (e.g., 'DRAFT')
+--     v_initial_status := fnGetInitialStatus();
+
+--     -- 3. INSERT RECORD: Save the student with the official ERP configuration
+--     INSERT INTO students (
+--         document_number, name, phone, email, course_id, student_image, status, created_date, updated_date
+--     )
+--     VALUES (
+--         v_doc_number, p_name, p_phone, p_email, p_course_id, p_student_image, v_initial_status, NOW(), NOW()
+--     )
+--     RETURNING id INTO v_new_student_id;
+
+--     -- 4. COURSE MAPPING: Maintain relations
+--     INSERT INTO tblStudentCourse (student_id, course_id, enrollment_date, status, created_date, updated_date)
+--     VALUES (v_new_student_id, p_course_id, CURRENT_DATE, 'Active', NOW(), NOW());
+
+--     -- 5. TRACK CREATION: Log the genesis of the document in the Universal History Table
+--     INSERT INTO tblGenericApprovalHistory (
+--         DocumentCode, RecordId, ActionName, OldStatusCode, NewStatusCode, Remarks, PerformedBy
+--     ) VALUES (
+--         'STUDENT_ADM', v_new_student_id::VARCHAR, 'Submit Application', 'NONE', v_initial_status, 'Initial Admission Record Created', p_created_by
+--     );
+
+--     RETURN v_new_student_id;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+-- -- ==========================================
+-- -- MODULE 7 UPDATE 2: ERP-Native Edit Student
+-- -- ==========================================
+-- DROP FUNCTION IF EXISTS fnEditStudent(INT, VARCHAR, VARCHAR, VARCHAR, INT, VARCHAR, INT, TEXT, DATE);
+
+-- CREATE OR REPLACE FUNCTION fnEditStudent(
+--     p_student_id INT,
+--     p_name VARCHAR,
+--     p_phone VARCHAR,
+--     p_email VARCHAR,
+--     p_course_id INT,
+--     p_student_image VARCHAR DEFAULT NULL,
+--     p_age INT DEFAULT NULL,
+--     p_address TEXT DEFAULT NULL,
+--     p_dob DATE DEFAULT NULL
+-- )
+-- RETURNS BOOLEAN AS $$
+-- DECLARE
+--     v_rows_affected INT;
+--     v_reset_status VARCHAR;
+-- BEGIN
+--     -- Fetch the starting status dynamically so any edits push the document back to the start of the workflow
+--     v_reset_status := fnGetInitialStatus();
+
+--     UPDATE students 
+--     SET 
+--         name = COALESCE(p_name, name),
+--         age = COALESCE(p_age, age),
+--         phone = COALESCE(p_phone, phone),
+--         email = COALESCE(p_email, email),
+--         address = COALESCE(p_address, address),
+--         dob = COALESCE(p_dob, dob),
+--         student_image = COALESCE(p_student_image, student_image),
+--         status = v_reset_status, -- ERP ENFORCEMENT: Reset workflow status dynamically
+--         updated_date = NOW()
+--     WHERE id = p_student_id;
+    
+--     GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+    
+--     -- Update course enrollment
+--     IF p_course_id IS NOT NULL THEN
+--         PERFORM fnUpdateStudentCourse(p_student_id, p_course_id);
+--     END IF;
+    
+--     -- Log the workflow reset into the ERP generic history
+--     IF v_rows_affected > 0 THEN
+--         INSERT INTO tblGenericApprovalHistory (
+--             DocumentCode, RecordId, ActionName, OldStatusCode, NewStatusCode, Remarks, PerformedBy
+--         ) VALUES (
+--             'STUDENT_ADM', p_student_id::VARCHAR, 'Edit Record', 'VARIOUS', v_reset_status, 'Record edited - Workflow reset', 'System'
+--         );
+--     END IF;
+    
+--     RETURN v_rows_affected > 0;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+-- -- ==========================================
+-- -- MODULE 7 UPDATE 3: ERP-Native Listing View
+-- -- Removes the legacy LEFT JOIN on `studentapproval`
+-- -- ==========================================
+
+-- -- 1. Explicitly drop the old function to allow the return signature to change
+-- DROP FUNCTION IF EXISTS fnGetStudentsWithCurrentCourse(VARCHAR);
+
+-- -- 2. Create the new upgraded function
+-- CREATE OR REPLACE FUNCTION fnGetStudentsWithCurrentCourse(p_search VARCHAR DEFAULT NULL)
+-- RETURNS TABLE(
+--     id INT, document_number VARCHAR, name VARCHAR, phone VARCHAR, email VARCHAR, 
+--     course_id INT, course VARCHAR, course_code VARCHAR, student_image VARCHAR, 
+--     created_date TIMESTAMP, updated_date TIMESTAMP, 
+--     approval_status VARCHAR, approved_by VARCHAR, remarks TEXT, approved_date TIMESTAMP
+-- ) AS $$
+-- BEGIN
+--     RETURN QUERY
+--     SELECT
+--         s.id, s.document_number, s.name, s.phone, s.email, sc.course_id,
+--         COALESCE(c.course_name, 'Not assigned'), COALESCE(c.course_code, ''),
+--         s.student_image, s.created_date, s.updated_date,
+        
+--         -- Pull directly from the new ERP status column
+--         COALESCE(s.status, 'UNKNOWN'), 
+        
+--         -- Pull timeline details from the Universal Generic History Table
+--         COALESCE(h.PerformedBy, 'System'),
+--         COALESCE(h.Remarks, ''), 
+--         h.PerformedDate::timestamp without time zone
+--     FROM students s
+--     LEFT JOIN tblStudentCourse sc ON s.id = sc.student_id AND sc.status = 'Active'
+--     LEFT JOIN tblCourse c ON sc.course_id = c.course_id
+--     -- Dynamic ERP Join
+--     LEFT JOIN LATERAL (
+--         SELECT PerformedBy, Remarks, PerformedDate
+--         FROM tblGenericApprovalHistory
+--         WHERE DocumentCode = 'STUDENT_ADM' AND RecordId = s.id::VARCHAR AND NewStatusCode = s.status
+--         ORDER BY HistoryId DESC LIMIT 1
+--     ) h ON TRUE
+--     WHERE s.is_deleted = FALSE
+--       AND (p_search IS NULL OR s.name ILIKE '%' || p_search || '%' OR s.document_number ILIKE '%' || p_search || '%')
+--     ORDER BY s.id DESC;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+
+
+
+-- -- ==========================================
+-- -- MODULE 8: LEAVE REQUEST ERP MODULE
+-- -- ==========================================
+
+-- -- 1. Create the Leave Request Table
+-- CREATE TABLE IF NOT EXISTS tblLeaveRequests (
+--     id SERIAL PRIMARY KEY,
+--     document_number VARCHAR(50) UNIQUE NOT NULL,
+--     employee_name VARCHAR(100) NOT NULL,
+--     leave_type VARCHAR(50) NOT NULL,
+--     start_date DATE NOT NULL,
+--     end_date DATE NOT NULL,
+--     reason TEXT,
+--     status VARCHAR(50) NOT NULL, -- Managed dynamically by ERP Status Master
+--     created_by VARCHAR(100) DEFAULT 'System',
+--     created_date TIMESTAMP DEFAULT NOW(),
+--     updated_date TIMESTAMP DEFAULT NOW(),
+--     is_deleted BOOLEAN DEFAULT FALSE
+-- );
+
+-- -- 2. Metadata Registration (Crucial for the Generic Approval Engine!)
+-- -- We update the Document Master so the Engine knows where 'LEAVE_REQ' data lives.
+-- UPDATE tblDocumentMaster 
+-- SET TargetTableName = 'tblLeaveRequests', 
+--     TargetStatusColumn = 'status', 
+--     TargetPrimaryKey = 'id' 
+-- WHERE DocumentCode = 'LEAVE_REQ';
+
+-- 3. Attach the Universal Audit Trigger
+-- This guarantees EVERY edit/delete is captured in tblDocumentHistory automatically.
+-- DROP TRIGGER IF EXISTS trg_audit_leaves ON tblLeaveRequests;
+-- CREATE TRIGGER trg_audit_leaves
+-- AFTER INSERT OR UPDATE OR DELETE ON tblLeaveRequests
+-- FOR EACH ROW EXECUTE FUNCTION spGenericAuditTrigger('LEAVE_REQ', 'id');
+
+
+-- -- -- ==========================================
+-- -- -- FUNCTION: Create Leave Request
+-- -- -- ==========================================
+-- DROP FUNCTION IF EXISTS fnCreateLeaveRequest(VARCHAR, VARCHAR, DATE, DATE, TEXT, VARCHAR);
+
+-- CREATE OR REPLACE FUNCTION fnCreateLeaveRequest(
+--     p_employee_name VARCHAR,
+--     p_leave_type VARCHAR,
+--     p_start_date DATE,
+--     p_end_date DATE,
+--     p_reason TEXT,
+--     p_created_by VARCHAR DEFAULT 'System'
+-- )
+-- RETURNS INT AS $$
+-- DECLARE
+--     v_new_leave_id INT;
+--     v_doc_number VARCHAR;
+--     v_initial_status VARCHAR;
+-- BEGIN
+--     -- 1. Get the dynamic LEV-XXXXX number
+--     v_doc_number := spGenerateDocumentNumber('LEAVE_REQ');
+
+--     -- 2. Ask the Status Master for the starting state (e.g., 'DRAFT')
+--     v_initial_status := fnGetInitialStatus();
+
+--     -- 3. Insert the record
+--     INSERT INTO tblLeaveRequests (
+--         document_number, employee_name, leave_type, start_date, end_date, reason, status, created_by
+--     ) VALUES (
+--         v_doc_number, p_employee_name, p_leave_type, p_start_date, p_end_date, p_reason, v_initial_status, p_created_by
+--     ) RETURNING id INTO v_new_leave_id;
+
+--     -- 4. Log the creation in the Generic Workflow History
+--     INSERT INTO tblGenericApprovalHistory (
+--         DocumentCode, RecordId, ActionName, OldStatusCode, NewStatusCode, Remarks, PerformedBy
+--     ) VALUES (
+--         'LEAVE_REQ', v_new_leave_id::VARCHAR, 'Create Draft', 'NONE', v_initial_status, 'Leave Request drafted.', p_created_by
+--     );
+
+--     RETURN v_new_leave_id;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+-- -- ==========================================
+-- -- FUNCTION: Edit Leave Request
+-- -- ==========================================
+-- DROP FUNCTION IF EXISTS fnEditLeaveRequest(INT, VARCHAR, VARCHAR, DATE, DATE, TEXT, VARCHAR);
+
+-- CREATE OR REPLACE FUNCTION fnEditLeaveRequest(
+--     p_leave_id INT,
+--     p_employee_name VARCHAR,
+--     p_leave_type VARCHAR,
+--     p_start_date DATE,
+--     p_end_date DATE,
+--     p_reason TEXT,
+--     p_edited_by VARCHAR DEFAULT 'System'
+-- )
+-- RETURNS BOOLEAN AS $$
+-- DECLARE
+--     v_rows_affected INT;
+--     v_reset_status VARCHAR;
+-- BEGIN
+--     -- Fetch the starting status so edits reset the workflow safely
+--     v_reset_status := fnGetInitialStatus();
+
+--     UPDATE tblLeaveRequests 
+--     SET 
+--         employee_name = COALESCE(p_employee_name, employee_name),
+--         leave_type = COALESCE(p_leave_type, leave_type),
+--         start_date = COALESCE(p_start_date, start_date),
+--         end_date = COALESCE(p_end_date, end_date),
+--         reason = COALESCE(p_reason, reason),
+--         status = v_reset_status, -- ERP Rule: Edits reset workflow to start
+--         updated_date = NOW()
+--     WHERE id = p_leave_id;
+    
+--     GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+    
+--     -- Log the workflow reset into the generic history
+--     IF v_rows_affected > 0 THEN
+--         INSERT INTO tblGenericApprovalHistory (
+--             DocumentCode, RecordId, ActionName, OldStatusCode, NewStatusCode, Remarks, PerformedBy
+--         ) VALUES (
+--             'LEAVE_REQ', p_leave_id::VARCHAR, 'Edit Record', 'VARIOUS', v_reset_status, 'Request edited - Workflow reset', p_edited_by
+--         );
+--     END IF;
+    
+--     RETURN v_rows_affected > 0;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+
+-- -- ==========================================
+-- -- FUNCTION: Get Leave Requests Listing
+-- -- ==========================================
+-- DROP FUNCTION IF EXISTS fnGetLeaveRequests(VARCHAR);
+
+-- CREATE OR REPLACE FUNCTION fnGetLeaveRequests(p_search VARCHAR DEFAULT NULL)
+-- RETURNS TABLE(
+--     id INT, document_number VARCHAR, employee_name VARCHAR, leave_type VARCHAR, 
+--     start_date DATE, end_date DATE, status VARCHAR, created_date TIMESTAMP,
+--     last_action_by VARCHAR, last_action_date TIMESTAMP
+-- ) AS $$
+-- BEGIN
+--     RETURN QUERY
+--     SELECT
+--         l.id, l.document_number, l.employee_name, l.leave_type, 
+--         l.start_date, l.end_date, l.status, l.created_date,
+--         -- Fetch the timeline dynamically from the Universal Engine
+--         COALESCE(h.PerformedBy, 'System'),
+--         h.PerformedDate::timestamp without time zone
+--     FROM tblLeaveRequests l
+--     LEFT JOIN LATERAL (
+--         SELECT PerformedBy, PerformedDate
+--         FROM tblGenericApprovalHistory
+--         WHERE DocumentCode = 'LEAVE_REQ' AND RecordId = l.id::VARCHAR AND NewStatusCode = l.status
+--         ORDER BY HistoryId DESC LIMIT 1
+--     ) h ON TRUE
+--     WHERE l.is_deleted = FALSE
+--       AND (p_search IS NULL OR l.employee_name ILIKE '%' || p_search || '%' OR l.document_number ILIKE '%' || p_search || '%')
+--     ORDER BY l.id DESC;
+-- END;
+-- $$ LANGUAGE plpgsql;

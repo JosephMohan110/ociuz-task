@@ -1173,10 +1173,10 @@ def update_student_view(request, student_id):
 # Add this alongside your other views
 @global_error_handler
 def leave_list(request):
-    """
-    View to display all active leave requests with structural buttons 
-    loaded directly from database transition states.
-    """
+    # """
+    # View to display all active leave requests with structural buttons 
+    # loaded directly from database transition states.
+    # """
     search_keyword = request.GET.get('search', '').strip()
     leaves = db_get_leave_requests(search_keyword)
     
@@ -1212,7 +1212,7 @@ def leave_list(request):
 
 @global_error_handler
 def add_leave_request(request):
-    """ View to create a leave request with rigorous timeline checks """
+    # """ View to create a leave request with rigorous timeline checks """
     if request.method == 'POST':
         emp_name = request.POST.get('employee_name', '').strip()
         l_type = request.POST.get('leave_type', '').strip()
@@ -1259,7 +1259,7 @@ def add_leave_request(request):
 # --- 1. REUSABLE RESPONSE & ERROR HANDLER ---
 
 def api_response(success=True, data=None, message='', status_code=200, meta=None):
-    """ Standardized JSON structure for ALL API responses. """
+    # """ Standardized JSON structure for ALL API responses. """
     response = {
         'success': success,
         'message': message,
@@ -1271,7 +1271,7 @@ def api_response(success=True, data=None, message='', status_code=200, meta=None
 
 
 def api_error_handler(view_func):
-    """ Centralized API try-catch block. Never drops an HTML error page. """
+    # """ Centralized API try-catch block. Never drops an HTML error page. """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         try:
@@ -1288,7 +1288,7 @@ def api_error_handler(view_func):
 @csrf_exempt
 @api_error_handler
 def api_v1_get_document_types(request):
-    """ GET: Lists all available ERP modules (Student, Leave, etc.) """
+    # """ GET: Lists all available ERP modules (Student, Leave, etc.) """
     docs = db_get_all_documents()
     return api_response(data=docs, message='Document Types retrieved')
 
@@ -1304,7 +1304,7 @@ def api_v1_get_status_master(request):
 @csrf_exempt
 @api_error_handler
 def api_v1_workflow_config(request):
-    """ GET: Gets buttons/actions available for a specific state """
+    # """ GET: Gets buttons/actions available for a specific state """
     doc_code = request.GET.get('doc_code')
     status_code = request.GET.get('status')
     role = request.GET.get('role', 'Manager')
@@ -1327,10 +1327,10 @@ def api_v1_dashboard_data(request):
 @csrf_exempt
 @api_error_handler
 def api_v1_dynamic_documents(request, doc_code):
-    """ 
-    GET: List all records for any module dynamically (with pagination & search).
-    POST: Create a new record in any module dynamically.
-    """
+    # """ 
+    # GET: List all records for any module dynamically (with pagination & search).
+    # POST: Create a new record in any module dynamically.
+    # """
     if request.method == 'GET':
         search = request.GET.get('search', '')
         limit = int(request.GET.get('limit', 10))
@@ -1361,9 +1361,9 @@ def api_v1_dynamic_documents(request, doc_code):
 @csrf_exempt
 @api_error_handler
 def api_v1_dynamic_document_detail(request, doc_code, record_id):
-    """
-    PUT: Dynamically update an existing record (resets workflow).
-    """
+    # """
+    # PUT: Dynamically update an existing record (resets workflow).
+    # """
     if request.method == 'PUT':
         try:
             payload = json.loads(request.body)
@@ -1380,7 +1380,7 @@ def api_v1_dynamic_document_detail(request, doc_code, record_id):
 @csrf_exempt
 @api_error_handler
 def api_v1_document_history(request, doc_code, record_id):
-    """ GET: Retrieves the full forensic lifecycle audit log of any document. """
+    # """ GET: Retrieves the full forensic lifecycle audit log of any document. """
     history = db_get_document_history(doc_code, record_id)
     return api_response(data=history, message=f'History for {doc_code} {record_id} retrieved')
 
@@ -1388,7 +1388,7 @@ def api_v1_document_history(request, doc_code, record_id):
 @csrf_exempt
 @api_error_handler
 def api_v1_process_workflow(request):
-    """ POST: Process transition for ANY document module dynamically. """
+    # """ POST: Process transition for ANY document module dynamically. """
     if request.method != 'POST':
         return api_response(success=False, message='Method Not Allowed', status_code=405)
 
@@ -1434,10 +1434,10 @@ def api_v1_process_workflow(request):
 
 @global_error_handler
 def erp_dashboard_view(request):
-    """
-    Renders the central ERP Dashboard UI.
-    Verifies state status parameters using our custom session pipeline.
-    """
+    # """
+    # Renders the central ERP Dashboard UI.
+    # Verifies state status parameters using our custom session pipeline.
+    # """
     # Protect Route: Verify the custom SQL session block exists
     if not request.session.get('is_erp_superuser'):
         messages.error(request, "Access Denied. Please log in first.")

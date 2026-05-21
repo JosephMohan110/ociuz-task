@@ -36,7 +36,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     
     // Fetch Document Types
-    fetch("{% url 'api_get_doc_types' %}")
+    fetch("{% url 'api_v1_get_document_types' %}")
         .then(res => res.json())
         .then(data => {
             const tbody = document.querySelector('#docTable tbody');
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
     // Fetch Status Master
-    fetch("{% url 'api_get_status_master' %}")
+    fetch("{% url 'api_v1_get_status_master' %}")
         .then(res => res.json())
         .then(data => {
             const tbody = document.querySelector('#statusTable tbody');

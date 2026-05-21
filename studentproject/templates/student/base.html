@@ -81,36 +81,108 @@
 
         .nav .btn {
             white-space: nowrap;
-        }
-
-        .btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 10px 14px;
-            margin: 2px;
-            border: none;
-            border-radius: 10px;
+            padding: 10px 20px;
+            min-height: 44px;
+            gap: 8px;
+            margin: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 14px;
             cursor: pointer;
             text-decoration: none;
             font-size: 14px;
             font-weight: 600;
-            transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-            box-shadow: 0 6px 16px rgba(2, 6, 23, 0.06);
-        }
-
-        .btn-logout {
-            background: #ef4444;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.15);
             color: white;
-            border: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
         }
 
-        .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 22px rgba(2, 6, 23, 0.10);
-            filter: brightness(1.02);
+        .nav .btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 100%);
+            z-index: -1;
+            transition: opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        .nav .btn:hover {
+            transform: translateY(-4px) scale(1.03);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25), 0 0 20px rgba(255, 255, 255, 0.4);
+            border-color: rgba(255, 255, 255, 0.6);
+            background: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+
+        .nav .btn:hover::before {
+            opacity: 1;
+        }
+
+        .nav .btn:active {
+            transform: translateY(1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Specific styles for special buttons in nav */
+        .nav .btn-primary {
+            background: rgba(37, 99, 235, 0.3);
+            border-color: rgba(59, 130, 246, 0.4);
         }
         
+        .nav .btn-primary:hover {
+            background: rgba(37, 99, 235, 0.6);
+            border-color: rgba(96, 165, 250, 0.7);
+            box-shadow: 0 12px 28px rgba(37, 99, 235, 0.4), 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+
+        .nav .btn-trash {
+            background: rgba(220, 38, 38, 0.4);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .nav .btn-trash:hover {
+            background: rgba(220, 38, 38, 0.8);
+            border-color: rgba(248, 113, 113, 0.7);
+            box-shadow: 0 12px 28px rgba(220, 38, 38, 0.4), 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+
+        .nav .btn-logout {
+            background: rgba(234, 88, 12, 0.4);
+            border-color: rgba(249, 115, 22, 0.4);
+        }
+
+        .nav .btn-logout:hover {
+            background: rgba(234, 88, 12, 0.8);
+            border-color: rgba(253, 186, 116, 0.7);
+            box-shadow: 0 12px 28px rgba(234, 88, 12, 0.4), 0 0 20px rgba(249, 115, 22, 0.5);
+        }
+
+        .user-badge {
+            font-size: 14px;
+            color: #ffffff;
+            font-weight: 600;
+            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+            margin-right: 8px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            display: inline-flex;
+            align-items: center;
+        }
+
         .content {
             padding: 20px;
         }
@@ -369,27 +441,28 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Student Management System</h1>
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 10px;">
+                <h1 style="margin-bottom: 0;">Student Management System</h1>
+                <!-- Dynamically display the logged-in user next to the title -->
+                <span class="user-badge" style="margin: 0; font-size: 15px; padding: 6px 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+                    👤 {{ request.user.username|default:"Admin" }}
+                </span>
+            </div>
 
             <div class="nav">
                 <div class="button-set">
                     <!-- Standard ERP Modules -->
                     <a href="{% url 'erp_dashboard' %}" class="btn btn-primary">📊 Dashboard</a>
-                    <a href="{% url 'student_list' %}" class="btn btn-outline">🎓 Admissions</a>
+                    <a href="{% url 'student_list' %}" class="btn btn-primary">🎓 Admissions</a>
                     <a href="{% url 'add_student' %}" class="btn btn-primary">Add Student</a>
-                    <a href="{% url 'leave_list' %}" class="btn btn-outline">✈️ Leaves</a>
-                    <a href="{% url 'global_approval_history' %}" class="btn btn-outline">📋 Audit History</a>
-                    <a href="{% url 'deleted_students_list' %}" class="btn btn-danger">🗑️ Trash</a>
+                    <a href="{% url 'leave_list' %}" class="btn btn-primary">✈️ Leaves</a>
+                    <a href="{% url 'global_approval_history' %}" class="btn btn-primary">📋 Audit History</a>
+                    <a href="{% url 'deleted_students_list' %}" class="btn btn-trash">🗑️ Trash</a>
                 </div>
 
                 <!-- User Controls & Config (Pushed to the right) -->
                 <div class="user-controls">
-                    <!-- Dynamically display the logged-in user -->
-                    <span style="font-size: 14px; color: #64748b; font-weight: 600; padding-right: 8px; border-right: 2px solid #e2e8f0;">
-                        👤 {{ request.user.username|default:"Admin" }}
-                    </span>
-
-                    <a href="{% url 'config_masters' %}" class="btn btn-info">⚙️ Config Masters</a>
+                    <a href="{% url 'config_masters' %}" class="btn btn-primary">⚙️ Config Masters</a>
                     <a href="{% url 'logout' %}" class="btn btn-logout">🚪 Logout</a>
                 </div>
             </div>

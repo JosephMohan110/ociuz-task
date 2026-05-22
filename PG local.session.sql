@@ -1590,7 +1590,7 @@ BEGIN
     -- The DB builds a string like: UPDATE students SET status = 'APPROVED' WHERE id = 1
     IF v_TargetTable IS NOT NULL THEN
         v_DynamicSQL := format('UPDATE %I SET %I = %L, updated_date = NOW() WHERE %I = %s', 
-                               v_TargetTable, v_TargetStatusCol, v_NextStatusCode, v_TargetPkCol, p_RecordId);
+                               lower(v_TargetTable), lower(v_TargetStatusCol), v_NextStatusCode, lower(v_TargetPkCol), p_RecordId);
         EXECUTE v_DynamicSQL;
     END IF;
 
@@ -1998,6 +1998,29 @@ BEGIN
 END $$;
 
 
+-- 4. Register Student Admission Workflow Configuration Rules
+DO $$
+BEGIN
+    INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
+    SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Submit/Review', 'Manager'
+    FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
+    WHERE d.DocumentCode = 'STUDENT_ADM' AND s1.StatusCode = 'DRAFT' AND s2.StatusCode = 'PENDING'
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
+    SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Approve', 'Manager'
+    FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
+    WHERE d.DocumentCode = 'STUDENT_ADM' AND s1.StatusCode = 'PENDING' AND s2.StatusCode = 'APPROVED'
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
+    SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Reject', 'Manager'
+    FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
+    WHERE d.DocumentCode = 'STUDENT_ADM' AND s1.StatusCode = 'PENDING' AND s2.StatusCode = 'REJECTED'
+    ON CONFLICT DO NOTHING;
+END $$;
+
+
 -- ==========================================
 -- FUNCTION: Create Leave Request
 -- ==========================================
@@ -2182,7 +2205,7 @@ BEGIN
         )
         SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM FilteredData t;
     ', 
-    v_table, 
+    lower(v_table), 
     CASE WHEN p_search IS NOT NULL AND p_search != '' THEN 
         'AND (document_number ILIKE ' || quote_literal('%' || p_search || '%') || ')'
     ELSE '' END,
@@ -2239,7 +2262,7 @@ BEGIN
     INTO v_cols, v_vals
     FROM jsonb_each_text(p_payload);
 
-    v_sql := format('INSERT INTO %I (%s) VALUES (%s) RETURNING %I', v_table, v_cols, v_vals, v_pk);
+    v_sql := format('INSERT INTO %I (%s) VALUES (%s) RETURNING %I', lower(v_table), v_cols, v_vals, lower(v_pk));
     EXECUTE v_sql INTO v_new_id;
 
     -- Track history
@@ -2287,7 +2310,7 @@ BEGIN
     INTO v_set_clause
     FROM jsonb_each_text(p_payload);
 
-    v_sql := format('UPDATE %I SET %s WHERE %I = %s RETURNING *', v_table, v_set_clause, v_pk, p_record_id);
+    v_sql := format('UPDATE %I SET %s WHERE %I = %s RETURNING *', lower(v_table), v_set_clause, lower(v_pk), p_record_id);
     EXECUTE v_sql;
 
     INSERT INTO tblGenericApprovalHistory (DocumentCode, RecordId, ActionName, OldStatusCode, NewStatusCode, Remarks, PerformedBy)
@@ -2332,15 +2355,23 @@ BEGIN
     FROM tblLeaveRequests WHERE is_deleted = FALSE;
 
     -- [C] Aggregate Course-wise Admissions dynamically
+    --frontend needs SINGLE JSON ARRAY SO WE USE JSON_BUILD_OBJEST.
     SELECT COALESCE(jsonb_agg(
         jsonb_build_object(
+            --course_name IT  IS FOR  JSON key.
+            --This part creates FINAL JSON ARRAY for dashboard.
             'course_name', COALESCE(c.course_name, 'Unassigned'),
+            --Add another JSON field:
             'student_count', sub.student_count
         )
     ), '[]'::jsonb) INTO v_course_stats
+    --SUBQUERY. . Query inside another query.
     FROM (
+        -- EAC COURSE ILL ATRA STUDENTS IND ANU ARIYAMN AAA ETU USE CEYUNATU....
+        --tblStudentCourse IS DENOTE AS  SC
         SELECT sc.course_id, COUNT(s.id) as student_count
         FROM students s
+        --STUDENT TABLE AND COURSE TABLE DATA IS MAKIN JOIN....
         LEFT JOIN tblStudentCourse sc ON s.id = sc.student_id AND sc.status = 'Active'
         WHERE s.is_deleted = FALSE
         GROUP BY sc.course_id
@@ -2349,6 +2380,8 @@ BEGIN
 
     -- [D] Aggregate System-wide Approval Statistics (Last 30 Days)
     SELECT jsonb_build_object(
+
+        -- E TABLtblGenericApprovalHistory  ULLA DATA NA EDUKUM
         'total_actions', COUNT(HistoryId),
         'approvals', COUNT(HistoryId) FILTER (WHERE ActionName = 'Approve'),
         'rejections', COUNT(HistoryId) FILTER (WHERE ActionName = 'Reject')
@@ -2406,16 +2439,23 @@ $$ LANGUAGE plpgsql;
 
 
 -- ==========================================
+-- CLEANUP: Drop existing function and table
+-- ==========================================
+DROP FUNCTION IF EXISTS fnVerifyERPSuperuser(VARCHAR, VARCHAR);
+DROP TABLE IF EXISTS tblERPSuperuser;
+
+-- ==========================================
 -- MODULE 11: ERP SUPERUSER AUTHENTICATION
 -- ==========================================
 
 -- Enable the pgcrypto extension for secure SHA-256 / Blowfish hashing
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS tblERPSuperuser (
+CREATE TABLE tblERPSuperuser (
     id SERIAL PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    role_name VARCHAR(50) NOT NULL DEFAULT 'Manager',
     is_active BOOLEAN DEFAULT TRUE,
     created_date TIMESTAMP DEFAULT NOW(),
     updated_date TIMESTAMP DEFAULT NOW()
@@ -2423,22 +2463,17 @@ CREATE TABLE IF NOT EXISTS tblERPSuperuser (
 
 -- Seed an initial master superuser safely if it doesn't exist
 -- Username: admin | Password: adminpassword123
-INSERT INTO tblERPSuperuser (username, password_hash)
+INSERT INTO tblERPSuperuser (username, password_hash, role_name)
 VALUES (
     'admin', 
-    crypt('adminpassword123', gen_salt('bf', 8)) -- Blowfish hashing
+    crypt('adminpassword123', gen_salt('bf', 8)), -- Blowfish hashing
+    'Manager'
 )
 ON CONFLICT (username) DO NOTHING;
-
-
-
-
 
 -- ==========================================
 -- CORRECTED FUNCTION: Verify ERP Superuser
 -- ==========================================
-DROP FUNCTION IF EXISTS fnVerifyERPSuperuser(VARCHAR, VARCHAR);
-
 CREATE OR REPLACE FUNCTION fnVerifyERPSuperuser(
     p_username VARCHAR,
     p_password VARCHAR
@@ -2446,28 +2481,29 @@ CREATE OR REPLACE FUNCTION fnVerifyERPSuperuser(
 RETURNS TABLE (
     user_id INT,
     user_name VARCHAR,
-    is_authenticated BOOLEAN
+    is_authenticated BOOLEAN,
+    assigned_role VARCHAR -- Renamed from role_name to avoid column shadowing conflict
 ) AS $$
 DECLARE
     v_id INT;
     v_hash TEXT;
     v_active BOOLEAN;
+    v_role VARCHAR;
 BEGIN
-    -- Look up the target profile using your actual column name: is_active
-    SELECT id, password_hash, is_active 
-    INTO v_id, v_hash, v_active
+    -- Look up the target profile... WE ARE FINDIN TE USER...
+    SELECT id, password_hash, is_active, tblERPSuperuser.role_name
+    INTO v_id, v_hash, v_active, v_role
     FROM tblERPSuperuser
     WHERE username = p_username;
 
     -- Validate if the user exists, is active, and the password matches
     IF FOUND AND v_active = TRUE AND v_hash = crypt(p_password, v_hash) THEN
-        RETURN QUERY SELECT v_id, CAST(p_username AS VARCHAR), TRUE;
+        RETURN QUERY SELECT v_id, CAST(p_username AS VARCHAR), TRUE, CAST(v_role AS VARCHAR);
     ELSE
-        RETURN QUERY SELECT 0, CAST('' AS VARCHAR), FALSE;
+        RETURN QUERY SELECT 0, CAST('' AS VARCHAR), FALSE, CAST('Manager' AS VARCHAR);
     END IF;
 END;
 $$ LANGUAGE plpgsql;
-
 
 
 
@@ -2494,6 +2530,45 @@ CREATE TABLE chatbot_user_details (
 SELECT * FROM chatbot_user_details;
 
 DELETE FROM chatbot_user_details;
+
+
+
+
+
+-- ==========================================
+-- MODULE 12: DATABASE OPTIMIZATION (INDEXES)
+-- ==========================================
+
+-- 1. PARTIAL INDEXES (Highly Optimized for Soft Deletes)
+These indexes only store rows where is_deleted = FALSE. 
+This keeps the index tiny and lightning-fast for frontend listing queries.
+CREATE INDEX IF NOT EXISTS idx_students_active ON students(id) WHERE is_deleted = FALSE;
+CREATE INDEX IF NOT EXISTS idx_leaves_active ON tblLeaveRequests(id) WHERE is_deleted = FALSE;
+
+-- 2. FOREIGN KEY & LOOKUP INDEXES
+-- PostgreSQL does NOT automatically index foreign keys. We must do it manually to speed up JOINs.
+CREATE INDEX IF NOT EXISTS idx_students_course_id ON students(course_id);
+CREATE INDEX IF NOT EXISTS idx_students_doc_number ON students(document_number);
+CREATE INDEX IF NOT EXISTS idx_leaves_doc_number ON tblLeaveRequests(document_number);
+
+-- 3. COMPOSITE INDEXES (For Generic Polymorphic Tables)
+-- Since tblGenericApprovalHistory and tblDocumentHistory look up data using 
+-- TWO columns (DocumentCode + RecordId), a composite index speeds this up massively.
+CREATE INDEX IF NOT EXISTS idx_generic_approval_lookup 
+ON tblGenericApprovalHistory(DocumentCode, RecordId);
+
+CREATE INDEX IF NOT EXISTS idx_document_history_lookup 
+ON tblDocumentHistory(DocumentId, RecordId);
+
+-- 4. GIN INDEX FOR JSONB
+-- Your spGenericAuditTrigger saves snapshots as JSONB. If you ever need to search 
+-- INSIDE the JSON (e.g., "Find all audits where name was changed to 'John'"), a GIN index makes it instant.
+CREATE INDEX IF NOT EXISTS idx_audit_old_data ON tblDocumentHistory USING GIN (OldData);
+CREATE INDEX IF NOT EXISTS idx_audit_new_data ON tblDocumentHistory USING GIN (NewData);
+CREATE INDEX IF NOT EXISTS idx_legacy_audit_newval ON tblAuditLog USING GIN (new_value);
+
+
+
 
 
 

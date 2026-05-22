@@ -63,21 +63,7 @@ urlpatterns = [
     path('api/students/<int:student_id>/approve/', views.api_approve_student, name='api_approve_student'),
     path('api/students/<int:student_id>/reject/', views.api_reject_student, name='api_reject_student'),
 
-    # ==========================================
-    # 8. MODULE 9: NEW DYNAMIC REST APIs (No Hardcoding)
-    # ==========================================
-#     path('api/v1/document-types/', views.api_v1_get_document_types, name='api_get_doc_types'),
-#     path('api/v1/status-master/', views.api_v1_get_status_master, name='api_get_status_master'),
-#     path('api/v1/workflow-config/', views.api_v1_workflow_config, name='api_workflow_config'),
-#     path('api/v1/dashboard/', views.api_v1_dashboard_data, name='api_dashboard'),
-#     path('api/v1/erp-dashboard/', views.api_v1_erp_dashboard, name='api_erp_dashboard'),
-#     path('api/v1/workflow/process/', views.api_v1_process_workflow, name='api_process_workflow'),
-    
-#     # Generic CRUD APIs based on Document Code
-#     path('api/v1/documents/<str:doc_code>/', views.api_v1_dynamic_documents, name='api_dynamic_documents'),
-#     path('api/v1/documents/<str:doc_code>/<int:record_id>/', views.api_v1_dynamic_document_detail, name='api_dynamic_document_detail'),
-#     path('api/v1/documents/<str:doc_code>/<int:record_id>/history/', views.api_v1_document_history, name='api_document_history'),
-# ]
+
     path('api/v1/document-types/', views.api_v1_get_document_types, name='api_v1_get_document_types'),
     path('api/v1/status-master/', views.api_v1_get_status_master, name='api_v1_get_status_master'),
     

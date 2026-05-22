@@ -15,7 +15,8 @@ class GlobalExceptionMiddleware:
 
     def process_exception(self, request, exception):
         # FIX: Ensure 'student/' prefix is added here so Django can locate the file
-        return render(request, 'student/error.html', {
-            'code': 500,
-            'message': str(exception)
-        }, status=500)
+        # return render(request, 'student/error.html', {
+        #     'code': 500,
+        #     'message': str(exception)
+        # }, status=500)
+        pass

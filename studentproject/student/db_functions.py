@@ -566,13 +566,14 @@ def db_verify_erp_superuser(username, password):
     # """
     with connection.cursor() as cur:
         cur.execute(
-            "SELECT user_id, user_name, is_authenticated FROM fnVerifyERPSuperuser(%s, %s)",
+            "SELECT user_id, user_name, is_authenticated, assigned_role FROM fnVerifyERPSuperuser(%s, %s)",
             [username, password]
         )
         row = cur.fetchone()
         if row and row[2]: # row[2] represents 'is_authenticated' boolean
             return {
                 'id': row[0],
-                'username': row[1]
+                'username': row[1],
+                'role': row[3] or 'Manager'
             }
         return None

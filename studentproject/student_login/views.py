@@ -23,12 +23,11 @@ def login_view(request):
 
         if superuser is not None:
             # 3. Manually serialize custom context parameters to the Session cookie
-            request.session['erp_user_id'] = superuser['id']
-            request.session['erp_username'] = superuser['username']
-            request.session['is_erp_superuser'] = True
-            
-            # Explicitly mark user permissions context globally across modules
-            request.session['user_role'] = 'Manager' 
+            request.session['erp_user_id'] = superuser['id']  #--EX>User ID = 1
+            request.session['erp_username'] = superuser['username']  # STORE USER NAME
+            request.session['is_erp_superuser'] = True    # MARK CEYUTUM ITU 
+            request.session['role'] = superuser.get('role', 'Manager')
+            request.session['user_role'] = superuser.get('role', 'Manager') #'Manager' is the default value.
 
             messages.success(request, f"Welcome to the ERP System Master Dashboard, {superuser['username']}!")
             return redirect('erp_dashboard')

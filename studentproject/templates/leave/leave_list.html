@@ -22,7 +22,7 @@
     </thead>
     <tbody>
         {% for leave in leaves %}
-        <tr class="workflow-row" data-doc="LEAVE_REQ" data-status="{{ leave.status }}" data-id="{{ leave.id }}">
+        <tr class="workflow-row" data-doc="LEAVE_REQ" data-status="{{ leave.status|upper }}" data-id="{{ leave.id }}">
             <td style="font-weight: 600;">{{ leave.document_number }}</td>
             <td>{{ leave.employee_name }}</td>
             <td>{{ leave.leave_type }}</td>
@@ -40,20 +40,124 @@
     </tbody>
 </table>
 
+<div id="workflowConfirmModal" class="custom-modal-overlay" aria-hidden="true">
+    <div class="modal-content form-card" role="dialog" aria-modal="true" aria-labelledby="workflowModalTitle">
+        <h3 id="workflowModalTitle" style="margin-top:0; font-size:18px; color:#0f172a;">Confirm Workflow Action</h3>
+        <p id="workflowConfirmText" style="margin: 16px 0 12px; color:#334155; line-height:1.5;"></p>
+        <div id="workflowModalError" style="display:none; color:#b91c1c; font-size:14px; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:18px;">
+            <button type="button" id="workflowModalCancelButton" class="btn btn-secondary" style="min-width:120px;">Cancel</button>
+            <button type="button" id="workflowModalConfirmButton" class="btn btn-success" style="min-width:130px;">Yes, Continue</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.custom-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 9999;
+    padding: 16px;
+}
+.custom-modal-overlay.show {
+    display: flex;
+}
+.modal-content {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
+    padding: 24px;
+    border: 1px solid #e2e8f0;
+}
+</style>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const rows = document.querySelectorAll('.workflow-row');
-    
-    // Changing role context here to match your configured workflows ('Manager' or 'Employee')
-    const userRole = 'Manager'; 
+    const userRole = "{{ request.session.role|default:'Manager' }}";
+    const workflowModal = document.getElementById('workflowConfirmModal');
+    const workflowConfirmText = document.getElementById('workflowConfirmText');
+    const workflowModalError = document.getElementById('workflowModalError');
+    const confirmButton = document.getElementById('workflowModalConfirmButton');
+    const cancelButton = document.getElementById('workflowModalCancelButton');
+    let pendingAction = null;
+
+    function openWorkflowModal(action, docCode, currentStatus, recordId) {
+        pendingAction = { action, docCode, currentStatus, recordId };
+        workflowConfirmText.textContent = `Are you sure you want to execute action: "${action.action_name}"?`;
+        workflowModalError.textContent = '';
+        workflowModalError.style.display = 'none';
+        workflowModal.classList.add('show');
+        workflowModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeWorkflowModal() {
+        workflowModal.classList.remove('show');
+        workflowModal.setAttribute('aria-hidden', 'true');
+        pendingAction = null;
+        workflowModalError.textContent = '';
+        workflowModalError.style.display = 'none';
+    }
+
+    function submitWorkflowAction() {
+        if (!pendingAction) return;
+        const processUrl = "{% url 'api_v1_process_workflow' %}";
+
+        fetch(processUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                doc_code: pendingAction.docCode,
+                record_id: pendingAction.recordId,
+                current_status: pendingAction.currentStatus,
+                action_name: pendingAction.action.action_name,
+                role: userRole,
+                username: 'AdminUser',
+                remarks: 'Processed via listing panel interface'
+            })
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.reload();
+            } else {
+                workflowModalError.textContent = 'Workflow Engine Refusal: ' + (res.message || 'Action rejected.');
+                workflowModalError.style.display = 'block';
+            }
+        })
+        .catch(err => {
+            workflowModalError.textContent = 'Unable to process the request. Please try again.';
+            workflowModalError.style.display = 'block';
+            console.error('Workflow submission failed', err);
+        });
+    }
+
+    cancelButton.addEventListener('click', closeWorkflowModal);
+    confirmButton.addEventListener('click', submitWorkflowAction);
+    workflowModal.addEventListener('click', function(event) {
+        if (event.target === workflowModal) {
+            closeWorkflowModal();
+        }
+    });
 
     rows.forEach(row => {
         const docCode = row.getAttribute('data-doc');
-        const currentStatus = row.getAttribute('data-status');
+        const currentStatus = row.getAttribute('data-status').toUpperCase();
         const recordId = row.getAttribute('data-id');
         const container = row.querySelector('.dynamic-actions-container');
 
-        // 1. DYNAMIC FETCH: Safely load dynamic action buttons from configuration engine
         const configUrl = "{% url 'api_v1_workflow_config' %}";
         fetch(`${configUrl}?doc_code=${docCode}&status=${currentStatus}&role=${userRole}`)
             .then(res => {
@@ -72,7 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         btn.style.borderRadius = '4px';
                         btn.style.cursor = 'pointer';
                         btn.style.fontWeight = '600';
-                        
+
                         if (action.color_code) {
                             btn.style.backgroundColor = action.color_code;
                             btn.style.color = 'white';
@@ -82,38 +186,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             btn.style.color = 'white';
                             btn.style.border = 'none';
                         }
-                        
+
                         btn.textContent = action.action_name;
-                        
-                        // 2. TRANSACTION SUBMISSION: Fire API on button confirmation click
                         btn.onclick = function() {
-                            if (confirm(`Are you sure you want to execute action: "${action.action_name}"?`)) {
-                                const processUrl = "{% url 'api_v1_process_workflow' %}";
-                                fetch(processUrl, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'X-CSRFToken': '{{ csrf_token }}' // Standard security protection headers
-                                    },
-                                    body: JSON.stringify({
-                                        doc_code: docCode,
-                                        record_id: recordId,
-                                        current_status: currentStatus,
-                                        action_name: action.action_name,
-                                        role: userRole,
-                                        username: 'AdminUser',
-                                        remarks: 'Processed via listing panel interface'
-                                    })
-                                })
-                                .then(r => r.json())
-                                .then(res => {
-                                    if (res.success) {
-                                        window.location.reload();
-                                    } else {
-                                        alert('Workflow Engine Refusal: ' + res.message);
-                                    }
-                                });
-                            }
+                            openWorkflowModal(action, docCode, currentStatus, recordId);
                         };
                         container.appendChild(btn);
                     });
@@ -122,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(err => {
-                console.error("API error details:", err);
+                console.error('API error details:', err);
                 container.innerHTML = '<span class="text-danger" style="color: #ef4444; font-size: 12px; font-weight: 600;">⚠️ Connection Error</span>';
             });
     });

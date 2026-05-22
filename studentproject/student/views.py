@@ -1110,8 +1110,8 @@ def handle_document_approval(request, module_code, record_id):
         action_name = request.POST.get('action_name')
         remarks = request.POST.get('remarks', '')
         current_status = request.POST.get('current_status')
-        user_role = 'Manager' # In production: request.user.role
-        username = 'AdminUser' # In production: request.user.username
+        user_role = request.session.get('role', 'Manager') # In production: request.user.role
+        username = request.session.get('erp_username', 'AdminUser') # In production: request.user.username
 
         try:
             # 1. Ask the Universal Engine to process the workflow AND update the state
@@ -1180,8 +1180,8 @@ def leave_list(request):
     search_keyword = request.GET.get('search', '').strip()
     leaves = db_get_leave_requests(search_keyword)
     
-    # Simulate current authenticated worker role context
-    user_role = 'Employee' 
+    # Use the authenticated session role from login if available
+    user_role = request.session.get('role', 'Employee')
 
     # Dynamic button extraction loop safely wrapped in exception handling
     for leave in leaves:
@@ -1296,7 +1296,7 @@ def api_v1_get_document_types(request):
 @csrf_exempt
 @api_error_handler
 def api_v1_get_status_master(request):
-    """ GET: Lists all available global workflow statuses """
+    # """ GET: Lists all available global workflow statuses """
     statuses = db_get_all_statuses()
     return api_response(data=statuses, message='Status Master retrieved')
 
@@ -1305,9 +1305,9 @@ def api_v1_get_status_master(request):
 @api_error_handler
 def api_v1_workflow_config(request):
     # """ GET: Gets buttons/actions available for a specific state """
-    doc_code = request.GET.get('doc_code')
-    status_code = request.GET.get('status')
-    role = request.GET.get('role', 'Manager')
+    doc_code = (request.GET.get('doc_code') or '').strip().upper()
+    status_code = (request.GET.get('status') or '').strip().upper()
+    role = (request.GET.get('role') or request.session.get('role', 'Manager')).strip().title()
 
     if not doc_code or not status_code:
         return api_response(success=False, message='doc_code and status are required', status_code=400)
@@ -1397,13 +1397,13 @@ def api_v1_process_workflow(request):
     except json.JSONDecodeError:
         return api_response(success=False, message='Invalid JSON body', status_code=400)
 
-    doc_code = payload.get('doc_code')
+    doc_code = (payload.get('doc_code') or '').strip().upper()
     record_id = payload.get('record_id')
-    current_status = payload.get('current_status')
+    current_status = (payload.get('current_status') or '').strip().upper()
     action_name = payload.get('action_name')
     remarks = payload.get('remarks', '')
-    role = payload.get('role', 'Manager') 
-    username = payload.get('username', 'API_User')
+    role = (payload.get('role') or request.session.get('role', 'Manager')).strip().title()
+    username = payload.get('username', request.session.get('erp_username', 'API_User'))
 
     if not all([doc_code, record_id, current_status, action_name]):
         return api_response(success=False, message='Missing required parameters', status_code=400)
@@ -1460,10 +1460,10 @@ def erp_dashboard_view(request):
 @csrf_exempt
 @api_error_handler
 def api_v1_erp_dashboard(request):
-    """
-    API Endpoint: Returns the exact same metrics object as a JSON response.
-    Ideal for Single Page Applications (React/Vue) or Mobile Apps.
-    """
+    # """
+    # API Endpoint: Returns the exact same metrics object as a JSON response.
+    # Ideal for Single Page Applications (React/Vue) or Mobile Apps.
+    # """
     if request.method != 'GET':
         return api_response(success=False, message='Method Not Allowed', status_code=405)
 

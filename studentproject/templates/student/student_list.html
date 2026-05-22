@@ -32,7 +32,7 @@
     </thead>
     <tbody id="tableBody">
         {% for student in students %}
-        <tr>
+        <tr class="workflow-row" data-doc="STUDENT_ADM" data-status="{{ student.approval_status|upper }}" data-id="{{ student.id }}">
             <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
             <td>
                 {% if student.student_image %}
@@ -63,12 +63,7 @@
                     <a href="{% url 'edit_student' student.id %}?page={{ page_obj.number }}" class="btn btn-primary">Edit</a>
                     <a href="{% url 'delete_student' student.id %}?page={{ page_obj.number }}" class="btn btn-danger">Delete</a>
                     <a href="{% url 'approval_history' student.id %}?page={{ page_obj.number }}" class="btn btn-info">History</a>
-
-                    {# Approve / Reject only shown for Pending students #}
-                    {% if student.approval_status == 'Pending' %}
-                    <a href="{% url 'approve_student' student.id %}?page={{ page_obj.number }}" class="btn btn-success">Approve</a>
-                    <a href="{% url 'reject_student' student.id %}?page={{ page_obj.number }}" class="btn btn-danger">Reject</a>
-                    {% endif %}
+                    <div class="workflow-actions-container" style="display:flex; gap:5px; flex-wrap:wrap;"></div>
                 </div>
             </td>
         </tr>
@@ -79,6 +74,171 @@
         {% endfor %}
     </tbody>
 </table>
+
+<div id="studentWorkflowConfirmModal" class="custom-modal-overlay" aria-hidden="true">
+    <div class="modal-content form-card" role="dialog" aria-modal="true" aria-labelledby="workflowModalTitle">
+        <h3 id="workflowModalTitle" style="margin-top:0; font-size:18px; color:#0f172a;">Confirm Workflow Action</h3>
+        <p id="workflowConfirmText" style="margin: 16px 0 12px; color:#334155; line-height:1.5;"></p>
+        <div id="workflowModalError" style="display:none; color:#b91c1c; font-size:14px; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:18px;">
+            <button type="button" id="workflowModalCancelButton" class="btn btn-secondary" style="min-width:120px;">Cancel</button>
+            <button type="button" id="workflowModalConfirmButton" class="btn btn-success" style="min-width:130px;">Yes, Continue</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.custom-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 9999;
+    padding: 16px;
+}
+.custom-modal-overlay.show {
+    display: flex;
+}
+.modal-content {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
+    padding: 24px;
+    border: 1px solid #e2e8f0;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rows = document.querySelectorAll('.workflow-row');
+    const userRole = "{{ request.session.role|default:'Manager' }}";
+    const workflowModal = document.getElementById('studentWorkflowConfirmModal');
+    const workflowConfirmText = document.getElementById('workflowConfirmText');
+    const workflowModalError = document.getElementById('workflowModalError');
+    const confirmButton = document.getElementById('workflowModalConfirmButton');
+    const cancelButton = document.getElementById('workflowModalCancelButton');
+    let pendingAction = null;
+
+    function openWorkflowModal(action, docCode, currentStatus, recordId) {
+        pendingAction = { action, docCode, currentStatus, recordId };
+        workflowConfirmText.textContent = `Are you sure you want to execute action: "${action.action_name}"?`;
+        workflowModalError.textContent = '';
+        workflowModalError.style.display = 'none';
+        workflowModal.classList.add('show');
+        workflowModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeWorkflowModal() {
+        workflowModal.classList.remove('show');
+        workflowModal.setAttribute('aria-hidden', 'true');
+        pendingAction = null;
+        workflowModalError.textContent = '';
+        workflowModalError.style.display = 'none';
+    }
+
+    function submitWorkflowAction() {
+        if (!pendingAction) return;
+        const processUrl = "{% url 'api_v1_process_workflow' %}";
+
+        fetch(processUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                doc_code: pendingAction.docCode,
+                record_id: pendingAction.recordId,
+                current_status: pendingAction.currentStatus,
+                action_name: pendingAction.action.action_name,
+                role: userRole,
+                username: 'AdminUser',
+                remarks: 'Processed via student list interface'
+            })
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.reload();
+            } else {
+                workflowModalError.textContent = 'Workflow Engine Refusal: ' + (res.message || 'Action rejected.');
+                workflowModalError.style.display = 'block';
+            }
+        })
+        .catch(err => {
+            workflowModalError.textContent = 'Unable to process the request. Please try again.';
+            workflowModalError.style.display = 'block';
+            console.error('Workflow submission failed', err);
+        });
+    }
+
+    cancelButton.addEventListener('click', closeWorkflowModal);
+    confirmButton.addEventListener('click', submitWorkflowAction);
+    workflowModal.addEventListener('click', function(event) {
+        if (event.target === workflowModal) {
+            closeWorkflowModal();
+        }
+    });
+
+    rows.forEach(row => {
+        const docCode = row.getAttribute('data-doc');
+        const currentStatus = row.getAttribute('data-status').toUpperCase();
+        const recordId = row.getAttribute('data-id');
+        const container = row.querySelector('.workflow-actions-container');
+
+        const configUrl = "{% url 'api_v1_workflow_config' %}";
+        fetch(`${configUrl}?doc_code=${docCode}&status=${currentStatus}&role=${userRole}`)
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                container.innerHTML = '';
+                if (data.success && data.data.length > 0) {
+                    data.data.forEach(action => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'btn';
+                        btn.style.padding = '6px 12px';
+                        btn.style.fontSize = '12px';
+                        btn.style.borderRadius = '4px';
+                        btn.style.cursor = 'pointer';
+                        btn.style.fontWeight = '600';
+
+                        if (action.color_code) {
+                            btn.style.backgroundColor = action.color_code;
+                            btn.style.color = 'white';
+                            btn.style.border = 'none';
+                        } else {
+                            btn.style.backgroundColor = '#3b82f6';
+                            btn.style.color = 'white';
+                            btn.style.border = 'none';
+                        }
+
+                        btn.textContent = action.action_name;
+                        btn.addEventListener('click', function() {
+                            openWorkflowModal(action, docCode, currentStatus, recordId);
+                        });
+                        container.appendChild(btn);
+                    });
+                } else {
+                    container.innerHTML = '<span style="color: #64748b; font-size: 12px; font-style: italic;">No actions available</span>';
+                }
+            })
+            .catch(err => {
+                console.error('API error details:', err);
+                container.innerHTML = '<span class="text-danger" style="color: #ef4444; font-size: 12px; font-weight: 600;">⚠️ Connection Error</span>';
+            });
+    });
+});
+</script>
 
 <!-- PAGINATION SECTION - Always Show -->
 <div class="pagination-container">

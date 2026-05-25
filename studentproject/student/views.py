@@ -5,7 +5,7 @@
 # ─────────────────────────────────────────────────────────────
 
 import imghdr
-from multiprocessing.dummy import connection
+from django.db import connection, transaction
 import os
 import re
 import uuid
@@ -27,12 +27,16 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from functools import wraps
 from django.shortcuts import render
+# pyrefly: ignore [missing-import]
 from .db_functions import db_generate_document_number
+# pyrefly: ignore [missing-import]
 from .db_functions import db_process_document_action
+# pyrefly: ignore [missing-import]
 from .db_functions import get_client_ip, db_set_audit_context
 
 
 
+# pyrefly: ignore [missing-import]
 from .db_functions import (
     db_get_all_students,
     db_get_student_by_id,
@@ -203,7 +207,7 @@ def _validate_student_image(request, image_file, api_mode=False):
     # If api_mode=False, adds Django messages and returns has_error.
     # """
     if not image_file:
-        return False
+        return (False, '') if api_mode else False
 
     if image_file.size > MAX_IMAGE_SIZE:
         error_msg = 'Image must be 2MB or smaller.'
@@ -237,7 +241,7 @@ def _validate_student_image(request, image_file, api_mode=False):
         messages.error(request, error_msg)
         return True
 
-    return False
+    return (False, '') if api_mode else False
 
 
 def _save_student_image(image_file):
@@ -450,77 +454,6 @@ def restore_student(request, student_id):
     return redirect('deleted_students_list')
 
 
-
-
-
-
-# @global_error_handler
-# def approve_student(request, student_id):
-#     student = db_get_student_by_id(student_id)
-#     if not student:
-#         messages.error(request, 'Student not found.')
-#         return redirect('student_list')
-
-#     page = request.GET.get('page', '').strip()
-
-#     if request.method == 'POST':
-#         remarks = request.POST.get('remarks', '').strip()
-#         page = request.POST.get('page', page).strip()
-        
-#         # 1. Call the new DB Procedure
-#         result = db_process_student_approval(student_id, 'APPROVE', 'Admin', remarks)
-        
-#         # 2. Handle the response dynamically based on Status Code
-#         if result['status_code'] == 200:
-#             messages.success(request, result['message'])
-#         elif result['status_code'] == 409:
-#             messages.info(request, result['message']) # Already approved
-#         else:
-#             messages.warning(request, result['message']) # 400 or 500 errors
-
-#         if page:
-#             return redirect(f'{reverse("student_list")}?page={page}')
-#         return redirect('student_list')
-
-#     return render(request, 'student/approve_student.html', {
-#         'student': student, 'remarks': '', 'page': page,
-#     })
-
-
-# @global_error_handler
-# def reject_student(request, student_id):
-#     student = db_get_student_by_id(student_id)
-#     if not student:
-#         messages.error(request, 'Student not found.')
-#         return redirect('student_list')
-
-#     page = request.GET.get('page', '').strip()
-
-#     if request.method == 'POST':
-#         remarks = request.POST.get('remarks', '').strip()
-#         page = request.POST.get('page', page).strip()
-        
-#         # 1. Call the new DB Procedure
-#         result = db_process_student_approval(student_id, 'REJECT', 'Admin', remarks)
-        
-#         # 2. Handle the response dynamically based on Status Code
-#         if result['status_code'] == 200:
-#             messages.success(request, result['message'])
-#         elif result['status_code'] == 409:
-#             messages.info(request, result['message']) # Already rejected
-#         else:
-#             messages.warning(request, result['message']) # 400 or 500 errors
-
-#         if page:
-#             return redirect(f'{reverse("student_list")}?page={page}')
-#         return redirect('student_list')
-
-#     return render(request, 'student/reject_student.html', {
-#         'student': student, 'remarks': '', 'page': page,
-#     })
-
-
-
 # Replace the old approve_student and reject_student functions with db_process_student_approval
 
 @global_error_handler
@@ -715,6 +648,8 @@ def api_update_student(request, student_id):
     phone = request.POST.get('phone', '').strip()
     email = request.POST.get('email', '').strip()
     course = request.POST.get('course', '').strip()
+    print("DEBUG POST:", request.POST)
+    print("DEBUG FILES:", request.FILES)
     image_file = request.FILES.get('student_image')
 
     # Validate form
@@ -771,11 +706,23 @@ def api_approve_student(request, student_id):
     if student['approval_status'] != 'Pending':
         return JsonResponse({'error': f'Student is already {student["approval_status"]}.'}, status=400)
 
-    remarks = request.POST.get('remarks', '').strip()
-    approved_by = request.POST.get('approved_by', '').strip() or 'Admin'
+    # Handle JSON content-type from Axios
+    if request.content_type == 'application/json':
+        try:
+            payload = json.loads(request.body)
+            remarks = payload.get('remarks', '').strip()
+            approved_by = payload.get('approved_by', '').strip() or 'Admin'
+        except json.JSONDecodeError:
+            remarks = ''
+            approved_by = 'Admin'
+    else:
+        remarks = request.POST.get('remarks', '').strip()
+        approved_by = request.POST.get('approved_by', '').strip() or 'Admin'
 
     try:
-        db_approve_student(student_id, approved_by=approved_by, remarks=remarks)
+        result = db_process_student_approval(student_id, 'APPROVE', performed_by=approved_by, remarks=remarks)
+        if result.get('status_code') not in (0, 200):
+            raise Exception(result.get('message', 'Approval failed'))
         updated_student = db_get_student_by_id(student_id)
         return JsonResponse({
             'success': True,
@@ -807,11 +754,23 @@ def api_reject_student(request, student_id):
     if student['approval_status'] != 'Pending':
         return JsonResponse({'error': f'Student is already {student["approval_status"]}.'}, status=400)
 
-    remarks = request.POST.get('remarks', '').strip()
-    approved_by = request.POST.get('approved_by', '').strip() or 'Admin'
+    # Handle JSON content-type from Axios
+    if request.content_type == 'application/json':
+        try:
+            payload = json.loads(request.body)
+            remarks = payload.get('remarks', '').strip()
+            approved_by = payload.get('approved_by', '').strip() or 'Admin'
+        except json.JSONDecodeError:
+            remarks = ''
+            approved_by = 'Admin'
+    else:
+        remarks = request.POST.get('remarks', '').strip()
+        approved_by = request.POST.get('approved_by', '').strip() or 'Admin'
 
     try:
-        db_reject_student(student_id, approved_by=approved_by, remarks=remarks)
+        result = db_process_student_approval(student_id, 'REJECT', performed_by=approved_by, remarks=remarks)
+        if result.get('status_code') not in (0, 200):
+            raise Exception(result.get('message', 'Rejection failed'))
         updated_student = db_get_student_by_id(student_id)
         return JsonResponse({
             'success': True,
@@ -851,6 +810,7 @@ def api_get_students(request):
             'created_date': student['created_date'].isoformat() if student['created_date'] else None,
             'updated_date': student['updated_date'].isoformat() if student['updated_date'] else None,
             'approval_status': student['approval_status'],
+            'status_color': student.get('status_color', '#6c757d'),
             'approved_by': student['approved_by'],
             'remarks': student['remarks'],
             'approved_date': student['approved_date'].isoformat() if student['approved_date'] else None,
@@ -859,8 +819,25 @@ def api_get_students(request):
     return JsonResponse({'students': results})
 
 
+def api_get_student(request, student_id):
+    student = db_get_student_by_id(student_id)
+    if not student:
+        return JsonResponse({'error': 'Student not found'}, status=404)
 
-
+    return JsonResponse({'student': {
+        'id': student['id'],
+        'name': student['name'],
+        'phone': student['phone'],
+        'email': student['email'],
+        'course_id': student['course_id'],
+        'course': student['course'],
+        'course_code': student['course_code'],
+        'student_image': student['student_image'],
+        'approval_status': student['approval_status'],
+        'approved_by': student['approved_by'],
+        'remarks': student['remarks'],
+        'approved_date': student['approved_date'].isoformat() if student['approved_date'] else None,
+    }})
 
 
 def dashboard_view(request):
@@ -1263,7 +1240,7 @@ def api_response(success=True, data=None, message='', status_code=200, meta=None
     response = {
         'success': success,
         'message': message,
-        'data': data or {},
+        'data': {} if data is None else data,
     }
     if meta:
         response['meta'] = meta
@@ -1281,6 +1258,36 @@ def api_error_handler(view_func):
             error_msg = str(e).split('\n')[0].replace('EXCEPTION:', '').strip()
             return api_response(success=False, message=error_msg, status_code=400)
     return wrapper
+
+
+@csrf_exempt
+@api_error_handler
+def api_get_deleted_students(request):
+    deleted_students = db_get_deleted_students()
+    results = []
+    for student in deleted_students:
+        results.append({
+            'id': student['id'],
+            'name': student['name'],
+            'email': student['email'],
+            'deleted_by': student.get('deleted_by') or 'Admin',
+            'deleted_date': student['deleted_date'].isoformat() if student['deleted_date'] else None,
+        })
+
+    return api_response(data=results, message='Deleted students retrieved')
+
+
+@csrf_exempt
+@api_error_handler
+def api_restore_student(request, student_id):
+    if request.method != 'POST':
+        return api_response(success=False, message='Method not allowed', status_code=405)
+
+    success = db_restore_student(student_id, restored_by='Admin')
+    if not success:
+        return api_response(success=False, message='Failed to restore student', status_code=400)
+
+    return api_response(message='Student restored successfully')
 
 
 # --- 2. THE GENERIC API ENDPOINTS ---
@@ -1487,6 +1494,86 @@ def api_v1_erp_dashboard(request):
     }
     
     return api_response(data=dashboard_data, message='ERP Dashboard stats retrieved')
+
+
+@csrf_exempt
+@api_error_handler
+def api_v1_global_approval_history(request):
+    search = request.GET.get('q', '').strip()
+    action = request.GET.get('action', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+
+    history_logs = db_get_global_approval_history(search, action, date_from, date_to)
+
+    formatted_logs = []
+    for log in history_logs:
+        formatted_logs.append({
+            'audit_id': log.get('audit_id'),
+            'student_name': log.get('student_name'),
+            'action': log.get('action'),
+            'old_status': log.get('old_status'),
+            'new_status': log.get('new_status'),
+            'performed_by': log.get('performed_by'),
+            'performed_date': log.get('performed_date').isoformat() if log.get('performed_date') else None,
+            'remarks': log.get('remarks')
+        })
+
+    return api_response(data=formatted_logs, message='Global approval history retrieved')
+
+
+@csrf_exempt
+@api_error_handler
+def api_delete_student(request, student_id):
+    if request.method != 'POST':
+        return api_response(success=False, message='Method not allowed', status_code=405)
+
+    db_delete_student(student_id, deleted_by='Admin')
+    return api_response(success=True, message='Student moved to trash')
+
+
+@csrf_exempt
+@api_error_handler
+def api_get_student_history(request, student_id):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    history = db_get_approval_history(student_id)
+    formatted_history = []
+    for h in history:
+        formatted_history.append({
+            'id': h.get('id'),
+            'approval_status': h.get('approval_status'),
+            'approved_by': h.get('approved_by'),
+            'remarks': h.get('remarks'),
+            'approved_date': h.get('approved_date').isoformat() if h.get('approved_date') else None
+        })
+    return JsonResponse(formatted_history, safe=False)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTH-CHECK ENDPOINT — Called by React on every page load / refresh
+# ─────────────────────────────────────────────────────────────────────────────
+
+@csrf_exempt
+def api_v1_auth_me(request):
+    """
+    GET /student/api/v1/auth/me/
+    Returns current session state so the React SPA knows if the user is logged in.
+    - Authenticated : { "authenticated": true, "username": "...", "role": "..." }
+    - Not logged in : { "authenticated": false }  (HTTP 401)
+
+    Called by React's AuthContext on every app load / page refresh so that
+    protected routes can redirect to /login when the session has expired.
+    """
+    if request.session.get('is_erp_superuser'):
+        return JsonResponse({
+            'authenticated': True,
+            'username': request.session.get('erp_username', ''),
+            'role': request.session.get('role', 'Manager'),
+        })
+    return JsonResponse({'authenticated': False}, status=401)
+
 
 
 

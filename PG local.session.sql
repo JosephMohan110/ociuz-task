@@ -173,6 +173,38 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+-- ==========================================
+-- FUNCTION: Add Student (fnAddStudent)
+-- Inserts a new student row, ensures course enrollment, and returns the new id
+-- ==========================================
+DROP FUNCTION IF EXISTS fnAddStudent(VARCHAR, VARCHAR, VARCHAR, INT, VARCHAR);
+CREATE OR REPLACE FUNCTION fnAddStudent(
+    p_name VARCHAR,
+    p_phone VARCHAR,
+    p_email VARCHAR,
+    p_course_id INT,
+    p_student_image VARCHAR DEFAULT NULL
+)
+RETURNS INT AS $$
+DECLARE
+    new_id INT;
+BEGIN
+    INSERT INTO students (name, phone, email, course_id, student_image, status, created_date, updated_date)
+    VALUES (p_name, p_phone, p_email, p_course_id, p_student_image, 'Pending', NOW(), NOW())
+    RETURNING id INTO new_id;
+
+    -- Ensure the tblStudentCourse row exists for enrollment
+    PERFORM fnUpdateStudentCourse(new_id, p_course_id);
+
+    -- Add initial approval record (Pending)
+    INSERT INTO studentapproval (student_id, approval_status, approved_by, approved_date, remarks, created_date)
+    VALUES (new_id, 'Pending', 'System', NOW(), 'Initial submission - pending approval', NOW());
+
+    RETURN new_id;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ==========================================
 -- FUNCTION: Approve Student
 -- ==========================================
@@ -352,6 +384,7 @@ CREATE OR REPLACE FUNCTION fnGetStudentsWithCurrentCourse(
 )
 RETURNS TABLE(
     id INT,
+    document_number VARCHAR,
     name VARCHAR,
     phone VARCHAR,
     email VARCHAR,
@@ -362,42 +395,49 @@ RETURNS TABLE(
     created_date TIMESTAMP,
     updated_date TIMESTAMP,
     approval_status VARCHAR,
+    status_color VARCHAR,
     approved_by VARCHAR,
     remarks TEXT,
     approved_date TIMESTAMP
 ) AS $$
 BEGIN
-    RETURN QUERY
-    SELECT
-        s.id,
-        s.name,
-        s.phone,
-        s.email,
-        sc.course_id,
-        COALESCE(c.course_name, 'Not assigned'),
-        COALESCE(c.course_code, ''),
-        s.student_image,
-        s.created_date,
-        s.updated_date,
-        COALESCE(a.approval_status, 'Pending'),
-        COALESCE(a.approved_by, 'System'),
-        COALESCE(a.remarks, ''),
-        a.approved_date::timestamp without time zone
-    FROM students s
-    LEFT JOIN tblStudentCourse sc ON s.id = sc.student_id AND sc.status = 'Active'
-    LEFT JOIN tblCourse c ON sc.course_id = c.course_id
-    LEFT JOIN LATERAL (
-        SELECT sa.approval_status, sa.approved_by, sa.remarks, sa.approved_date
-        FROM studentapproval sa
-        WHERE sa.student_id = s.id
-        ORDER BY sa.id DESC
-        LIMIT 1
-    ) a ON TRUE
-    WHERE p_search IS NULL
+     RETURN QUERY
+     SELECT
+         s.id, s.document_number, s.name, s.phone, s.email, sc.course_id,
+         COALESCE(c.course_name, 'Not assigned'), COALESCE(c.course_code, ''),
+         s.student_image, s.created_date, s.updated_date,
+         
+         -- Pull directly from the new ERP status column
+         COALESCE(s.status, 'UNKNOWN'),
+         
+         -- Pull UI Color from DB Status Master
+         COALESCE(sm.ColorCode, '#6c757d')::VARCHAR,
+         
+         -- Pull timeline details from the Universal Generic History Table
+         COALESCE(h.PerformedBy, 'System'),
+         COALESCE(h.Remarks, ''),
+         h.PerformedDate::timestamp without time zone
+     FROM students s
+     LEFT JOIN tblStudentCourse sc ON s.id = sc.student_id AND sc.status = 'Active'
+     LEFT JOIN tblCourse c ON sc.course_id = c.course_id
+     LEFT JOIN tblDocumentStatusMaster sm ON s.status = sm.StatusCode
+     -- Dynamic ERP Join
+     LEFT JOIN LATERAL (
+         -- FIX: Aliased table as 'gah' and explicitly selected gah.Remarks
+         SELECT gah.PerformedBy, gah.Remarks, gah.PerformedDate
+         FROM tblGenericApprovalHistory gah
+         WHERE gah.DocumentCode = 'STUDENT_ADM'
+           AND gah.RecordId = s.id::VARCHAR
+           AND gah.NewStatusCode = s.status
+         ORDER BY gah.HistoryId DESC LIMIT 1
+     ) h ON TRUE
+    WHERE s.is_deleted = FALSE 
+      AND (p_search IS NULL
        OR s.name ILIKE '%' || p_search || '%'
        OR s.phone ILIKE '%' || p_search || '%'
        OR s.email ILIKE '%' || p_search || '%'
        OR c.course_name ILIKE '%' || p_search || '%'
+       OR s.document_number ILIKE '%' || p_search || '%')
     ORDER BY s.id DESC;
 END;
 $$ LANGUAGE plpgsql;
@@ -1989,36 +2029,55 @@ BEGIN
     WHERE d.DocumentCode = 'LEAVE_REQ' AND s1.StatusCode = 'PENDING' AND s2.StatusCode = 'REJECTED'
     ON CONFLICT DO NOTHING;
 
-    -- Add fallback link rule for testing Manager or Employee role actions on DRAFT rows
+    -- Allow the 'Manager' role to click 'Submit' on DRAFT leave requests (move to PENDING)
     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
-    SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Submit/Review', 'Manager'
+    SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Submit', 'Manager'
     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
     WHERE d.DocumentCode = 'LEAVE_REQ' AND s1.StatusCode = 'DRAFT' AND s2.StatusCode = 'PENDING'
-    ON CONFLICT DO NOTHING;
+    ON CONFLICT (DocumentId, CurrentStatusId, ActionName, RoleName) DO UPDATE
+        SET NextStatusId = EXCLUDED.NextStatusId, UpdatedDate = NOW();
+
+    -- CLEANUP: Remove old 'Submit/Review' action for LEAVE_REQ
+    DELETE FROM tblDocumentWorkflow
+    WHERE ActionName = 'Submit/Review'
+      AND DocumentId = (SELECT DocumentId FROM tblDocumentMaster WHERE DocumentCode = 'LEAVE_REQ');
 END $$;
 
 
+
 -- 4. Register Student Admission Workflow Configuration Rules
+-- Sequence: DRAFT →(Submit)→ PENDING →(Approve)→ APPROVED
+--                                      →(Reject)→  REJECTED
 DO $$
 BEGIN
+    -- Step 1: Manager clicks 'Submit' on a DRAFT record → moves to PENDING
     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
-    SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Submit/Review', 'Manager'
+    SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Submit', 'Manager'
     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
     WHERE d.DocumentCode = 'STUDENT_ADM' AND s1.StatusCode = 'DRAFT' AND s2.StatusCode = 'PENDING'
-    ON CONFLICT DO NOTHING;
+    ON CONFLICT (DocumentId, CurrentStatusId, ActionName, RoleName) DO UPDATE
+        SET NextStatusId = EXCLUDED.NextStatusId, UpdatedDate = NOW();
 
+    -- Step 2: Manager clicks 'Approve' on a PENDING record → moves to APPROVED
     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
     SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Approve', 'Manager'
     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
     WHERE d.DocumentCode = 'STUDENT_ADM' AND s1.StatusCode = 'PENDING' AND s2.StatusCode = 'APPROVED'
-    ON CONFLICT DO NOTHING;
+    ON CONFLICT (DocumentId, CurrentStatusId, ActionName, RoleName) DO NOTHING;
 
+    -- Step 3: Manager clicks 'Reject' on a PENDING record → moves to REJECTED
     INSERT INTO tblDocumentWorkflow (DocumentId, CurrentStatusId, NextStatusId, ActionName, RoleName)
     SELECT d.DocumentId, s1.StatusId, s2.StatusId, 'Reject', 'Manager'
     FROM tblDocumentMaster d, tblDocumentStatusMaster s1, tblDocumentStatusMaster s2
     WHERE d.DocumentCode = 'STUDENT_ADM' AND s1.StatusCode = 'PENDING' AND s2.StatusCode = 'REJECTED'
-    ON CONFLICT DO NOTHING;
+    ON CONFLICT (DocumentId, CurrentStatusId, ActionName, RoleName) DO NOTHING;
+
+    -- CLEANUP: Remove old 'Submit/Review' action if it exists (was a placeholder)
+    DELETE FROM tblDocumentWorkflow
+    WHERE ActionName = 'Submit/Review'
+      AND DocumentId = (SELECT DocumentId FROM tblDocumentMaster WHERE DocumentCode = 'STUDENT_ADM');
 END $$;
+
 
 
 -- ==========================================
@@ -2197,17 +2256,20 @@ BEGIN
     -- and applies pagination. row_to_json captures the entire row dynamically!
     v_sql := format('
         WITH FilteredData AS (
-            SELECT * FROM %I 
-            WHERE is_deleted = FALSE
+            SELECT t1.*, COALESCE(sm.ColorCode, ''#6c757d'')::VARCHAR as status_color 
+            FROM %I t1
+            LEFT JOIN tblDocumentStatusMaster sm ON sm.StatusCode = t1.%I
+            WHERE t1.is_deleted = FALSE
             %s 
-            ORDER BY created_date DESC
+            ORDER BY t1.created_date DESC
             LIMIT %s OFFSET %s
         )
         SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM FilteredData t;
     ', 
     lower(v_table), 
+    v_status_col,
     CASE WHEN p_search IS NOT NULL AND p_search != '' THEN 
-        'AND (document_number ILIKE ' || quote_literal('%' || p_search || '%') || ')'
+        'AND (t1.document_number ILIKE ' || quote_literal('%' || p_search || '%') || ')'
     ELSE '' END,
     p_limit, 
     p_offset);
@@ -2540,8 +2602,8 @@ DELETE FROM chatbot_user_details;
 -- ==========================================
 
 -- 1. PARTIAL INDEXES (Highly Optimized for Soft Deletes)
-These indexes only store rows where is_deleted = FALSE. 
-This keeps the index tiny and lightning-fast for frontend listing queries.
+-- These indexes only store rows where is_deleted = FALSE. 
+-- This keeps the index tiny and lightning-fast for frontend listing queries.
 CREATE INDEX IF NOT EXISTS idx_students_active ON students(id) WHERE is_deleted = FALSE;
 CREATE INDEX IF NOT EXISTS idx_leaves_active ON tblLeaveRequests(id) WHERE is_deleted = FALSE;
 

@@ -24,6 +24,7 @@ SECRET_KEY = 'django-insecure-ukpm)4^()(l&vp0#)g4@)8)65qzv+z%37$v$m1_i!x9-%+dw2^
 DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173']
 
 
 # Application definition
@@ -116,3 +117,14 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Session & CSRF Cookie Settings
+# ─────────────────────────────────────────────────────────────────────────────
+# Allow JavaScript to read the CSRF cookie (required for React SPA fetch calls)
+CSRF_COOKIE_HTTPONLY = False
+# SameSite=Lax lets the cookie be sent on top-level navigations (not cross-origin)
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax'
+# Keep session cookie httponly (JS doesn't need to read it; only sent automatically)
+SESSION_COOKIE_HTTPONLY = True

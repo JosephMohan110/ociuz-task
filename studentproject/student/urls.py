@@ -11,6 +11,9 @@ urlpatterns = [
     path('', views.student_list, name='student_list'),
     path('add/', views.add_student, name='add_student'),
     path('edit/<int:student_id>/', views.edit_student, name='edit_student'),
+    # Frontend uses `/students/:id/edit` (id before action). Provide alternate routes
+    path('<int:student_id>/edit/', views.edit_student, name='edit_student_alt'),
+    path('<int:student_id>/edit', views.edit_student),
     path('delete/<int:student_id>/', views.delete_student, name='delete_student'),
     
     # # Legacy Approval Views (If still used by your student_list.html buttons)
@@ -23,6 +26,9 @@ urlpatterns = [
     # 2. AUDIT & TRASH ARCHIVES
     # ==========================================
     path('history/<int:student_id>/', views.view_approval_history, name='approval_history'),
+    # Frontend uses `/students/:id/approval-history`. Provide alternate routes
+    path('<int:student_id>/approval-history/', views.view_approval_history, name='approval_history_alt'),
+    path('<int:student_id>/approval-history', views.view_approval_history),
     path('audit-history/', views.global_approval_history, name='global_approval_history'),
     path('deleted/', views.deleted_students_list, name='deleted_students_list'),
     path('restore/<int:student_id>/', views.restore_student, name='restore_student'),
@@ -37,7 +43,7 @@ urlpatterns = [
     # 4. ERP DASHBOARD & SYSTEM CONFIGS
     # ==========================================
     path('dashboard/', views.dashboard_view, name='dashboard'), # Legacy dashboard
-    path('erp-dashboard/', views.erp_dashboard_view, name='erp_dashboard'), # New ERP Dashboard
+    path('erp-dashboard/', views.erp_dashboard_view, name='student_erp_dashboard'), # New ERP Dashboard
     
     # Maps directly to the template without needing a separate views.py function
     path('config-masters/', lambda request: render(request, 'student/config_masters.html'), name='config_masters'),
@@ -58,14 +64,19 @@ urlpatterns = [
     # 7. LEGACY REST APIs
     # ==========================================
     path('api/students/', views.api_get_students, name='api_students'),
+    path('api/students/<int:student_id>/', views.api_get_student, name='api_get_student'),
+    path('api/students/deleted/', views.api_get_deleted_students, name='api_get_deleted_students'),
     path('api/students/add/', views.api_add_student, name='api_add_student'),
     path('api/students/update/<int:student_id>/', views.api_update_student, name='api_update_student'),
     path('api/students/<int:student_id>/approve/', views.api_approve_student, name='api_approve_student'),
+    path('api/students/<int:student_id>/restore/', views.api_restore_student, name='api_restore_student'),
     path('api/students/<int:student_id>/reject/', views.api_reject_student, name='api_reject_student'),
-
+    path('api/students/<int:student_id>/delete/', views.api_delete_student, name='api_delete_student'),
+    path('api/students/<int:student_id>/history/', views.api_get_student_history, name='api_get_student_history'),
 
     path('api/v1/document-types/', views.api_v1_get_document_types, name='api_v1_get_document_types'),
     path('api/v1/status-master/', views.api_v1_get_status_master, name='api_v1_get_status_master'),
+    path('api/v1/global-approval-history/', views.api_v1_global_approval_history, name='api_v1_global_approval_history'),
     
     # CRITICAL FIX: This exact path string fixes your reverse template loop match
     path('api/v1/workflow-config/', views.api_v1_workflow_config, name='api_v1_workflow_config'),
@@ -76,6 +87,8 @@ urlpatterns = [
     path('api/v1/documents/<str:doc_code>/', views.api_v1_dynamic_documents, name='api_v1_dynamic_documents'),
     path('api/v1/documents/<str:doc_code>/<int:record_id>/', views.api_v1_dynamic_document_detail, name='api_v1_dynamic_document_detail'),
     path('api/v1/erp-dashboard/', views.api_v1_erp_dashboard, name='api_v1_erp_dashboard'),
+    # Auth-check endpoint — React calls this on every page load to verify session
+    path('api/v1/auth/me/', views.api_v1_auth_me, name='api_v1_auth_me'),
 ]
 
 

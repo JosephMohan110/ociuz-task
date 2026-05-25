@@ -1,0 +1,30 @@
+/* AddStudent/EditStudent Specific Styles */
+
+.image-preview {
+  display: block;
+  max-width: 180px;
+  max-height: 180px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  margin-top: 10px;
+}
+
+.image-preview-wrapper {
+  margin-top: 6px;
+}
+
+.error-message {
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 4px;
+  min-height: 16px;
+}
+
+.form-input.error {
+  border-color: #dc3545;
+  background-color: #fff5f5;
+}
+
+.form-input.valid {
+  border-color: #28a745;
+}

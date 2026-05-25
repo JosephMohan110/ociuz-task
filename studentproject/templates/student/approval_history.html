@@ -1,4 +1,5 @@
-{% extends 'student/base.html' %}
+{% comment %}
+ {% extends 'student/base.html' %}
 
 {% block content %}
 <div class="history-container">
@@ -73,7 +74,7 @@
         <a href="{% url 'student_list' %}{% if page %}?page={{ page }}{% endif %}" class="btn btn-info">Back to List</a>
     </div>
 </div>
-
+<!-- 
 <style>
 .history-container {
     max-width: 900px;
@@ -115,4 +116,5 @@
     transform: translateY(-2px);
 }
 </style>
-{% endblock %}
+{% endblock %} 
+{% endcomment %}

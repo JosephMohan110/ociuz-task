@@ -1,0 +1,170 @@
+.archive-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.archive-header h2 {
+  margin: 0;
+  color: #dc3545;
+  font-size: 24px;
+}
+
+.archive-subtitle {
+  margin: 8px 0 0;
+  color: #475569;
+  max-width: 560px;
+}
+
+.alert {
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  font-size: 14px;
+}
+
+.alert-warning {
+  background: #fff4e5;
+  color: #663c00;
+  border: 1px solid #ffddb2;
+}
+
+.alert-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.05);
+}
+
+.deleted-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 740px;
+}
+
+.deleted-table th,
+.deleted-table td {
+  padding: 16px 18px;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.deleted-table th {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #475569;
+  font-weight: 700;
+}
+
+.deleted-table td {
+  color: #1f2937;
+  vertical-align: middle;
+}
+
+.student-name {
+  font-weight: 600;
+  color: #111827;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 18px;
+  padding: 48px 24px;
+  color: #64748b;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.loading-text {
+  padding: 36px 0;
+  text-align: center;
+  color: #475569;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.65);
+  z-index: 999;
+  padding: 20px;
+}
+
+.modal-overlay.show {
+  display: flex;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 460px;
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.18);
+  text-align: center;
+}
+
+.modal-icon {
+  font-size: 44px;
+  margin-bottom: 18px;
+}
+
+.modal-card h3 {
+  margin: 0 0 10px;
+  color: #111827;
+}
+
+.modal-card p {
+  margin: 0 0 18px;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.modal-note {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 14px;
+  color: #475569;
+  margin-bottom: 22px;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+@media (max-width: 680px) {
+  .archive-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .deleted-table {
+    min-width: 0;
+  }
+}

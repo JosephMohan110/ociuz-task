@@ -23,10 +23,14 @@ from student import views as student_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', student_views.student_list, name='home'),
-    path('student/', include('student.urls')),
-    path('chat_bot/', include('chat_bot.urls')),
     path('', include('student_login.urls')),
+    path('chat_bot/', include('chat_bot.urls')),
+    path('student/', include('student.urls')),
+    # Also expose the same student app under the plural `students/` path
+    # to match frontend routes (e.g., /students/, /students/49/edit)
+    path('students/', include('student.urls')),
+    path('', student_views.student_list, name='home'),
+    path('erp-dashboard/', student_views.erp_dashboard_view, name='erp_dashboard'),
 ]
 
 # Custom error pages

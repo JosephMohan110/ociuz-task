@@ -1,0 +1,15 @@
+/* ApprovalHistory Component Specific Styles */
+
+.history-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.timeline-item {
+  transition: box-shadow 200ms ease, transform 100ms ease;
+}
+
+.timeline-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+}

@@ -1,4 +1,5 @@
-{% extends 'student/base.html' %}
+{% comment %}
+ {% extends 'student/base.html' %}
 
 {% block content %}
 <!-- Proper custom header to avoid base.html visual conflicts -->
@@ -139,7 +140,7 @@
     100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 </style>
-
+<!-- 
 <script>
     // Function to Open the Modal dynamically
     function openRestoreModal(studentId, studentName) {
@@ -173,4 +174,5 @@
         }
     }
 </script>
-{% endblock %}
+{% endblock %} 
+{% endcomment %}

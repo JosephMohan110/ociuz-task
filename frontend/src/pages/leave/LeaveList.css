@@ -1,0 +1,63 @@
+/* LeaveList Page Specific Styles */
+
+.leave-list-page {
+  /* Use global body background; only manage inner spacing if needed */
+}
+
+.archive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.archive-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.archive-title span {
+  font-size: 26px;
+}
+
+.archive-title h2 {
+  color: #0f172a;
+  margin: 0;
+}
+
+.doc-number {
+  font-weight: 600;
+}
+
+.duration-text {
+  font-size: 13px;
+  color: #475569;
+}
+
+.dynamic-actions-container {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  border: none;
+  background: #2563eb;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.modal-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}

@@ -1,0 +1,43 @@
+.approve-title { color: #28a745; margin-bottom: 0.5rem; }
+
+.student-summary-box {
+  background: #f8f9fa;
+  padding: 14px 16px;
+  margin: 18px 0 22px;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.student-summary-box p { margin: 6px 0; }
+
+.approve-form { text-align: left; }
+
+.form-group { margin-bottom: 16px; }
+
+.form-control {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  resize: vertical;
+}
+
+.error-alert {
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.action-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.btn { padding: 8px 14px; border-radius: 6px; border: none; color: #fff; cursor: pointer; }
+.btn-success { background: #28a745; }
+.btn-info { background: #0dcaf0; }

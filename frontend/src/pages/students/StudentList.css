@@ -1,0 +1,207 @@
+/* StudentList Component Specific Styles */
+
+.search-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+}
+
+.search-results-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.results-info {
+  margin-top: 10px;
+  color: #475569;
+  font-size: 14px;
+  transition: opacity 150ms ease;
+  opacity: 0;
+}
+
+.results-info.show {
+  opacity: 1;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #0069d9;
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.link-button:hover {
+  color: #004085;
+}
+
+.search-result-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  display: block;
+}
+
+.search-result-item:hover {
+  background: #f8fafc;
+}
+
+.search-result-item-name {
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 6px;
+  font-size: 17px;
+}
+
+.search-result-item-details {
+  font-size: 15px;
+  color: #374151;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.search-result-item-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.student-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  display: block;
+}
+
+.student-thumb.placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  color: #64748b;
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.workflow-actions-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.no-actions {
+  color: #64748b;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ── Modal error message ─────────────────────────────────────── */
+.modal-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+/* ── Workflow sequence hint (current status → next status) ───── */
+.workflow-sequence-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 14px 0 4px;
+  flex-wrap: wrap;
+}
+
+/* ── Workflow action buttons ──────────────────────────────────── */
+.workflow-action-btn {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.workflow-action-btn:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+/* ── Pagination ───────────────────────────────────────────────── */
+.pagination-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 0;
+}
+
+.pagination-info {
+  font-size: 14px;
+  color: #475569;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #dbe3f1;
+  border-radius: 999px;
+  outline: none;
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 8px 24px rgba(2,6,23,0.05);
+  font-size: 14px;
+}
+
+.search-input:focus {
+  border-color: rgba(37,99,235,0.7);
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.18);
+}
+
+.search-container {
+  margin-bottom: 18px;
+}
+
+.students-table td {
+  vertical-align: middle;
+}
+

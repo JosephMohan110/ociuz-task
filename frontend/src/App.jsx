@@ -16,6 +16,7 @@ import StudentList from './pages/students/StudentList';
 import Trash from './pages/students/Trash';
 import Login from './pages/login/Login';
 import ChatBot from './pages/chat_bot/ChatBot';
+import ChatBotLeads from './pages/chat_bot/ChatBotLeads';
 import Leave from './pages/leave/Leave';
 import LeaveList from './pages/leave/LeaveList';
 
@@ -56,12 +57,13 @@ function Layout() {
   const { user } = useAuth();
 
   const navItems = [
-    { to: '/', label: '📊 Dashboard' },
-    { to: '/students', label: '🎓 Admissions' },
+    { to: '/', label: ' Dashboard' },
+    { to: '/students', label: ' Admissions' },
     { to: '/students/add', label: 'Add Student' },
-    { to: '/leaves', label: '✈️ Leaves' },
-    { to: '/global-approval-history', label: '📋 Audit History' },
-    { to: '/trash', label: '🗑️ Trash', className: 'btn-trash' },
+    { to: '/leaves', label: ' Leaves' },
+    { to: '/chatbot-leads', label: ' Chatbot Leads' },
+    { to: '/global-approval-history', label: ' Audit History' },
+    { to: '/trash', label: ' Trash', className: 'btn-trash' },
   ];
 
   return (
@@ -72,8 +74,8 @@ function Layout() {
             <h1>Student Management System</h1>
             <div className="header-actions">
               <span className="user-badge">👤 {user?.username || 'Manager'}</span>
-              <NavLink to="/config" className="btn-small btn-trash">⚙️ Config Masters</NavLink>
-              <NavLink to="/logout" className="btn-small btn-trash">🚪 Logout</NavLink>
+              <NavLink to="/config" className="btn-small btn-trash"> Config Masters</NavLink>
+              <NavLink to="/logout" className="btn-small btn-trash"> Logout</NavLink>
             </div>
           </div>
           <div className="nav">
@@ -151,6 +153,7 @@ export default function App() {
             <Route path="students/:id/reject" element={<RejectStudent />} />
             <Route path="leaves" element={<LeaveList />} />
             <Route path="leaves/new" element={<Leave />} />
+            <Route path="chatbot-leads" element={<ChatBotLeads />} />
             <Route path="trash" element={<Trash />} />
             <Route path="global-approval-history" element={<GlobalApprovalHistory />} />
             <Route path="error" element={<ErrorPage />} />

@@ -34,8 +34,7 @@ def chat_api(request):
         # Get user data from conversation memory
         user_data = conversation_memory.get(session_id, {})
 
-        # Save to database only if user has shared at least name or email
-        if (user_data.get('name') or user_data.get('email')) and user_data.get('status') == 'interested':
+        if user_data.get('name') or user_data.get('email') or user_data.get('phone'):
             try:
                 with connection.cursor() as cursor:
                     cursor.execute('''

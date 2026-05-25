@@ -1,0 +1,180 @@
+/* ChatBotLeads.css - Simple White Design */
+
+.chatbot-leads-page {
+  padding: 20px;
+  background-color: #ffffff;
+  color: #333333;
+  font-family: Arial, sans-serif;
+  min-height: calc(100vh - 80px);
+}
+
+.simple-header {
+  margin-bottom: 20px;
+  border-bottom: 1px solid #eeeeee;
+  padding-bottom: 15px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title-simple {
+  margin: 0 0 5px 0;
+  font-size: 24px;
+  color: #222222;
+}
+
+.subtitle {
+  margin: 0;
+  color: #666666;
+  font-size: 14px;
+}
+
+/* Buttons */
+.btn-simple-primary, .btn-simple-secondary, .btn-simple-success {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn-simple-primary {
+  background-color: #007bff;
+  color: #ffffff;
+}
+
+.btn-simple-primary:hover {
+  background-color: #0056b3;
+}
+
+.btn-simple-secondary {
+  background-color: #f8f9fa;
+  color: #333333;
+  border: 1px solid #dddddd;
+}
+
+.btn-simple-secondary:hover {
+  background-color: #e2e6ea;
+}
+
+.btn-simple-success {
+  background-color: #28a745;
+  color: #ffffff;
+}
+
+.btn-simple-success:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.btn-simple-success:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Form */
+.simple-form-card {
+  background-color: #fcfcfc;
+  border: 1px solid #eeeeee;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.simple-form-card h3 {
+  margin-top: 0;
+  color: #333333;
+}
+
+.hint {
+  color: #777777;
+  font-size: 13px;
+  margin-bottom: 15px;
+}
+
+.simple-field-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.simple-field-row input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #cccccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.btn-simple-remove {
+  background-color: #dc3545;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.btn-simple-remove:hover {
+  background-color: #c82333;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #eeeeee;
+}
+
+/* Table */
+.simple-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #dddddd;
+  border-radius: 4px;
+}
+
+.simple-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  background-color: #ffffff;
+}
+
+.simple-table th, .simple-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #dddddd;
+  font-size: 14px;
+}
+
+.simple-table th {
+  background-color: #f4f4f4;
+  color: #333333;
+  font-weight: bold;
+}
+
+.simple-table tr:hover {
+  background-color: #f9f9f9;
+}
+
+.simple-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* States */
+.simple-state, .simple-error {
+  padding: 30px;
+  text-align: center;
+  background-color: #f9f9f9;
+  border: 1px solid #eeeeee;
+  border-radius: 4px;
+  color: #555555;
+}
+
+.simple-error {
+  color: #dc3545;
+  background-color: #fdf3f4;
+  border-color: #f5c6cb;
+}

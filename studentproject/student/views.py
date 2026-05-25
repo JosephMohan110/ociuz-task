@@ -1581,3 +1581,31 @@ def api_v1_auth_me(request):
 
 
 
+
+@csrf_exempt
+@api_error_handler
+def api_v1_chatbot_users(request):
+    if request.method == 'GET':
+        from .db_functions import db_get_chatbot_user_details, db_add_chatbot_user_detail
+        leads = db_get_chatbot_user_details()
+        return api_response(data=leads, message='Chatbot users retrieved')
+    elif request.method == 'POST':
+        from .db_functions import db_get_chatbot_user_details, db_add_chatbot_user_detail
+
+
+        try:
+            payload = json.loads(request.body)
+        except json.JSONDecodeError:
+            return api_response(success=False, message='Invalid JSON body', status_code=400)
+            
+        session_id = payload.get('session_id') or None
+        name = payload.get('name') or None
+        email = payload.get('email') or None
+        phone = payload.get('phone') or None
+        status = payload.get('status') or 'Pending'
+        
+        new_id = db_add_chatbot_user_detail(session_id, name, email, phone, status)
+        return api_response(data={'id': new_id}, message='Chatbot user added successfully', status_code=201)
+        
+    return api_response(success=False, message='Method Not Allowed', status_code=405)
+

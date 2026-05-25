@@ -115,8 +115,8 @@ export default function ErpDashboard() {
               <div className="progress-fill" style={{ width: admissionPercentage + '%' }}></div>
             </div>
             <div className="metric-stats">
-              <span className="stat-approved">✓ {admissions.approved_requests ?? 0} Approved</span>
-              <span className="stat-pending">⏳ {admissions.pending_approvals ?? 0} Pending</span>
+              <span className="stat-approved"> {admissions.approved_requests ?? 0} Approved</span>
+              <span className="stat-pending"> {admissions.pending_approvals ?? 0} Pending</span>
             </div>
           </div>
         </div>
@@ -134,8 +134,8 @@ export default function ErpDashboard() {
               <div className="progress-fill" style={{ width: approvalsPercentage + '%' }}></div>
             </div>
             <div className="metric-stats">
-              <span className="stat-approved">✓ {approvals30d.approvals ?? 0} Approvals</span>
-              <span className="stat-rejected">✕ {approvals30d.rejections ?? 0} Rejections</span>
+              <span className="stat-approved"> {approvals30d.approvals ?? 0} Approvals</span>
+              <span className="stat-rejected"> {approvals30d.rejections ?? 0} Rejections</span>
             </div>
           </div>
         </div>

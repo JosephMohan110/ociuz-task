@@ -577,3 +577,22 @@ def db_verify_erp_superuser(username, password):
                 'role': row[3] or 'Manager'
             }
         return None
+
+# ==========================================
+# CHATBOT USER DETAILS (Custom Table)
+# ==========================================
+
+def db_get_chatbot_user_details():
+    with connection.cursor() as cur:
+        cur.execute("SELECT id, session_id, name, email, phone, status, created_at FROM chatbot_user_details ORDER BY created_at DESC")
+        return _fetchall(cur)
+
+def db_add_chatbot_user_detail(session_id, name, email, phone, status='Pending'):
+    with transaction.atomic():
+        with connection.cursor() as cur:
+            cur.execute(
+                """INSERT INTO chatbot_user_details (session_id, name, email, phone, status) 
+                   VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+                [session_id, name, email, phone, status]
+            )
+            return cur.fetchone()[0]

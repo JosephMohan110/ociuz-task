@@ -89,6 +89,8 @@ urlpatterns = [
     path('api/v1/erp-dashboard/', views.api_v1_erp_dashboard, name='api_v1_erp_dashboard'),
     # Auth-check endpoint — React calls this on every page load to verify session
     path('api/v1/auth/me/', views.api_v1_auth_me, name='api_v1_auth_me'),
+    
+    path('api/v1/chatbot-users/', views.api_v1_chatbot_users, name='api_v1_chatbot_users'),
 ]
 
 
